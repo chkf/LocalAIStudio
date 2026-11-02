@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run_tests:
-        description: "Run iOS simulator tests (available after phase-one merge)"
+        description: "Run iOS simulator tests (slower)"
         required: false
         type: boolean
         default: false
