@@ -19,21 +19,35 @@ final class StudioUITests: XCTestCase {
         XCTAssertTrue(app.buttons["settingsButton"].exists)
         snapshot(app, "Models-light")
 
-        app.tabBars.buttons["设备"].tap()
-        XCTAssertTrue(app.navigationBars["设备"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["System"].tap()
+        XCTAssertTrue(app.navigationBars["System"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["deviceMemoryValue"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["systemRAMGauge"].exists)
         XCTAssertFalse(app.buttons["settingsButton"].exists)
-        XCTAssertTrue(app.staticTexts["系统等级，非摄氏温度"].isHittable)
-        snapshot(app, "Device-light")
+        XCTAssertFalse(app.staticTexts["系统等级，非摄氏温度"].exists)
+        snapshot(app, "System-light")
+
+        app.buttons["deviceDetailsButton"].tap()
+        XCTAssertTrue(app.navigationBars["设备信息"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["系统等级，非摄氏温度"].exists)
+        snapshot(app, "System-details")
+        app.buttons["closeDeviceDetails"].tap()
+        app.buttons["systemMemoryCard"].tap()
+        XCTAssertTrue(app.navigationBars["内存"].waitForExistence(timeout: 5))
+        snapshot(app, "System-memory-details")
+        app.buttons["closeDeviceDetails"].tap()
+        app.buttons["systemStorageCard"].tap()
+        XCTAssertTrue(app.navigationBars["存储"].waitForExistence(timeout: 5))
+        app.buttons["closeDeviceDetails"].tap()
     }
 
     @MainActor
     func testDeviceSamplingContinuesAcrossTabsAndResumesAfterBackground() throws {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["设备"].tap()
+        app.tabBars.buttons["System"].tap()
         let cpu = app.staticTexts["deviceCPUValue"]
-        let count = app.staticTexts["deviceSampleCount"]
+        let count = app.buttons["deviceDetailsButton"]
         XCTAssertTrue(count.waitForExistence(timeout: 10))
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             cpu.exists && cpu.label.contains("%")
@@ -42,12 +56,12 @@ final class StudioUITests: XCTestCase {
         let beforeSwitch = try sampleCount(count)
 
         app.tabBars.buttons["AI"].tap()
-        // The acceptance case observes 15 seconds on another tab, with no Device view callbacks.
+        // Observe another tab without Device view lifecycle callbacks.
         Thread.sleep(forTimeInterval: 15)
-        app.tabBars.buttons["设备"].tap()
+        app.tabBars.buttons["System"].tap()
         XCTAssertTrue(cpu.label.contains("%"), "Switching tabs must not discard the last valid CPU value.")
         XCTAssertGreaterThanOrEqual(try sampleCount(count), beforeSwitch + 6)
-        snapshot(app, "Device-after-tab-switch")
+        snapshot(app, "System-after-tab-switch")
 
         let beforeBackground = try sampleCount(count)
         XCUIDevice.shared.press(.home)
@@ -64,7 +78,7 @@ final class StudioUITests: XCTestCase {
             return number > beforeBackground + 1
         }, object: nil)
         wait(for: [resumed], timeout: 10)
-        snapshot(app, "Device-after-background")
+        snapshot(app, "System-after-background")
     }
 
     @MainActor
@@ -98,9 +112,9 @@ final class StudioUITests: XCTestCase {
         appearance.buttons["深色"].tap()
         XCTAssertTrue(appearance.buttons["深色"].isSelected)
         app.buttons["closeSettings"].tap()
-        app.tabBars.buttons["设备"].tap()
+        app.tabBars.buttons["System"].tap()
         XCTAssertTrue(app.staticTexts["deviceMemoryValue"].waitForExistence(timeout: 5))
-        snapshot(app, "Device-dark")
+        snapshot(app, "System-dark")
         app.tabBars.buttons["AI"].tap()
         snapshot(app, "AI-dark")
         app.terminate()
@@ -111,6 +125,21 @@ final class StudioUITests: XCTestCase {
         XCTAssertTrue(appearance.buttons["深色"].isSelected)
         appearance.buttons["跟随系统"].tap()
         app.buttons["closeSettings"].tap()
+    }
+
+    @MainActor
+    func testSystemSupportsAccessibilityTextSize() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        app.tabBars.buttons["System"].tap()
+        XCTAssertTrue(app.navigationBars["System"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["systemRAMGauge"].waitForExistence(timeout: 5))
+        snapshot(app, "System-accessibility-text")
+        app.buttons["deviceDetailsButton"].tap()
+        XCTAssertTrue(app.navigationBars["设备信息"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["closeDeviceDetails"].isHittable)
+        app.buttons["closeDeviceDetails"].tap()
     }
 
     @MainActor

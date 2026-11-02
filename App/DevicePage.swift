@@ -1,374 +1,328 @@
-import Charts
 import SwiftUI
 import UIKit
 
 struct DevicePage: View {
     @Environment(DeviceMonitor.self) private var monitor
     @Environment(ChatSession.self) private var chat
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(ModelLibrary.self) private var library
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var detail: Detail?
 
-    private var columns: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 24))
+    private enum Detail: String, Identifiable {
+        case memory = "内存", storage = "存储", device = "设备信息", tasks = "运行记录"
+        var id: String { rawValue }
     }
 
-    private var timeWindow: ClosedRange<Date> {
-        let end = monitor.snapshot?.date ?? .now
-        return end.addingTimeInterval(-300)...end
+    private var layout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 20))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
     }
-
-    private var timeTicks: [Date] {
-        let window = timeWindow
-        return [window.lowerBound, window.lowerBound.addingTimeInterval(150), window.upperBound]
-    }
-
-    private static let axisTimeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "HH:mm"
-        return formatter
-    }()
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(spacing: 14) {
                     if let snapshot = monitor.snapshot {
-                        samplingStatus(snapshot)
-                        memorySection(snapshot)
-                        Divider()
-                        cpuSection(snapshot)
-                        statusSection(snapshot)
-                        Divider()
-                        gpuSection
-                        detailsSection(snapshot)
-                        performanceSection
-                        #if targetEnvironment(simulator)
-                        Text("模拟器中的 RAM、CPU、GPU 和存储反映宿主 Mac，不能用于评估 iPhone 推理性能。内存预算与电池信息需真机验证。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        #endif
+                        memoryCard(snapshot)
+                        storageCard(snapshot)
+                        statusCard(snapshot)
+                        taskStatus
                     } else {
                         ProgressView("正在读取设备状态…")
-                            .frame(maxWidth: .infinity)
+                            .frame(maxWidth: .infinity, minHeight: 280)
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .navigationTitle("设备")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-
-    private func samplingStatus(_ snapshot: DeviceSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Label(monitor.isSampling ? "前台监测中" : "采样已暂停",
-                      systemImage: monitor.isSampling ? "waveform.path" : "pause.circle")
-                Spacer()
-                Text(snapshot.date.formatted(date: .omitted, time: .standard))
-                    .monospacedDigit()
-                    .accessibilityLabel("设备快照更新于")
-                    .accessibilityValue(snapshot.date.formatted(date: .omitted, time: .standard))
-                    .accessibilityIdentifier("deviceUpdatedAt")
-            }
-            Text("App 内每 2 秒更新 · 切换页面继续监测")
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-
-    private func memorySection(_ snapshot: DeviceSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("内存").font(.headline)
-                Spacer()
-                Text("最近 5 分钟 · \(monitor.history.count) 次采样")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityValue(String(monitor.history.count))
-                    .accessibilityIdentifier("deviceSampleCount")
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(memory(snapshot.appMemory))
-                    .font(.largeTitle.weight(.semibold))
-                    .monospacedDigit()
-                    .accessibilityIdentifier("deviceMemoryValue")
-                Text("本 App 实际占用 · phys_footprint")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            memoryChart
-            columns {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("进程剩余预算").font(.caption).foregroundStyle(.secondary)
-                    Text(memory(snapshot.availableMemory)).font(.title3.weight(.medium)).monospacedDigit()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("总物理 RAM").font(.caption).foregroundStyle(.secondary)
-                    Text(memory(snapshot.physicalMemory)).font(.title3.weight(.medium)).monospacedDigit()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            Text("预算是本进程当前还能申请的内存，不是设备空闲 RAM；它会随系统状态变化。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var memoryChart: some View {
-        Chart(monitor.history) { sample in
-            if let value = sample.appMemory {
-                LineMark(
-                    x: .value("时间", sample.date),
-                    y: .value("App 内存 (MiB)", Double(value) / 1_048_576),
-                    series: .value("连续采样段", sample.segment)
-                )
-                .foregroundStyle(.green)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-                PointMark(
-                    x: .value("时间", sample.date),
-                    y: .value("App 内存 (MiB)", Double(value) / 1_048_576)
-                )
-                .foregroundStyle(.green)
-                .symbolSize(8)
-            }
-        }
-        .chartXScale(domain: timeWindow)
-        .chartYScale(domain: 0...max(1, Double(monitor.history.compactMap(\.appMemory).max() ?? 0) / 1_048_576 * 1.15))
-        .chartXAxis {
-            AxisMarks(values: timeTicks) { value in
-                AxisTick()
-                AxisValueLabel(anchor: value.index == 2 ? .topTrailing : (value.index == 0 ? .topLeading : .top)) {
-                    if let date = value.as(Date.self) {
-                        Text(Self.axisTimeFormatter.string(from: date)).fixedSize()
+            .background {
+                ZStack {
+                    Color(uiColor: .systemGroupedBackground)
+                    if !reduceTransparency {
+                        LinearGradient(
+                            colors: [.blue.opacity(scheme == .dark ? 0.12 : 0.05), .clear],
+                            startPoint: .topTrailing, endPoint: .bottomLeading
+                        )
                     }
                 }
+                .ignoresSafeArea()
             }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                AxisGridLine()
-                AxisValueLabel {
-                    if let number = value.as(Double.self) {
-                        Text("\(number.formatted(.number.precision(.fractionLength(0)))) MiB")
-                    }
+            .navigationTitle("System")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("设备信息", systemImage: "info.circle") { detail = .device }
+                        .accessibilityIdentifier("deviceDetailsButton")
+                        .accessibilityValue("\(monitor.history.count)")
                 }
             }
-        }
-        .chartLegend(.hidden)
-        .frame(height: 110)
-        .accessibilityLabel("本 App 内存占用曲线，最近 5 分钟，单位 MiB")
-        .accessibilityIdentifier("deviceMemoryChart")
-    }
-
-    private func cpuSection(_ snapshot: DeviceSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("CPU").font(.headline)
-                Spacer()
-                Text(cpuText(snapshot.cpuPercent))
-                    .font(.title2.weight(.semibold))
-                    .monospacedDigit()
-                    .accessibilityIdentifier("deviceCPUValue")
-            }
-            Chart(monitor.history) { sample in
-                if let value = sample.cpuPercent {
-                    LineMark(
-                        x: .value("时间", sample.date),
-                        y: .value("App CPU (%)", value),
-                        series: .value("连续采样段", sample.segment)
-                    )
-                    .foregroundStyle(.blue)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-                    PointMark(x: .value("时间", sample.date), y: .value("App CPU (%)", value))
-                        .foregroundStyle(.blue)
-                        .symbolSize(8)
-                }
-            }
-            .chartXScale(domain: timeWindow)
-            .chartYScale(domain: 0...max(100, ceil((monitor.history.compactMap(\.cpuPercent).max() ?? 0) / 25) * 25))
-            .chartXAxis {
-                AxisMarks(values: timeTicks) { value in
-                    AxisTick()
-                    AxisValueLabel(anchor: value.index == 2 ? .topTrailing : (value.index == 0 ? .topLeading : .top)) {
-                        if let date = value.as(Date.self) {
-                            Text(Self.axisTimeFormatter.string(from: date)).fixedSize()
+            .sheet(item: $detail) { selected in
+                NavigationStack {
+                    List { detailContent(selected) }
+                        .navigationTitle(selected.rawValue)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完成") { detail = nil }
+                                    .accessibilityIdentifier("closeDeviceDetails")
+                            }
                         }
+                }
+            }
+        }
+    }
+
+    private func memoryCard(_ snapshot: DeviceSnapshot) -> some View {
+        Button { detail = .memory } label: {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("RAM").font(.title2.bold())
+                layout {
+                    VStack(alignment: .leading, spacing: 18) {
+                        memoryValue("已用", bytes: snapshot.systemMemory?.used, prominent: true)
+                        memoryValue("空闲", bytes: snapshot.systemMemory?.free, prominent: false)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    memoryRing(snapshot.systemMemory?.usedFraction)
                 }
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let number = value.as(Double.self) {
-                            Text("\(number.formatted(.number.precision(.fractionLength(0))))%")
-                        }
-                    }
-                }
-            }
-            .chartLegend(.hidden)
-            .frame(height: 90)
-            .accessibilityLabel("本 App CPU 使用率曲线，最近 5 分钟，单位百分比")
-            .accessibilityIdentifier("deviceCPUChart")
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("本 App 的平均使用量 · 单核满载 100%，多核可超过 100%。")
-                if let date = snapshot.cpuDate {
-                    Text("CPU 采样于 \(date.formatted(date: .omitted, time: .standard))")
-                        .monospacedDigit()
-                        .accessibilityIdentifier("deviceCPUUpdatedAt")
-                } else {
-                    Text("正在建立采样基线…")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    private func statusSection(_ snapshot: DeviceSnapshot) -> some View {
-        columns {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("热状态", systemImage: "thermometer.medium")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text(snapshot.thermalState)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(snapshot.thermalState == "正常" ? Color.primary : .orange)
-                Text("系统等级，非摄氏温度")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .leading, spacing: 6) {
-                Label("电池", systemImage: "battery.100percent")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text(snapshot.batteryPercent.map { "\($0)%" } ?? "不可用")
-                    .font(.title3.weight(.semibold)).monospacedDigit()
-                Text(snapshot.lowPowerMode ? "\(snapshot.batteryState) · 低电量模式" : snapshot.batteryState)
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var gpuSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("GPU / Metal").font(.headline)
-            Text(monitor.metalDeviceName ?? "Metal 设备不可用")
-                .font(.subheadline.weight(.medium))
-            if let record = chat.performanceRecords.last {
-                Text("最近一次推理后端：\(record.backend)")
-                    .font(.subheadline)
-            }
-            Text("显示 Metal 报告的硬件名称。全系统 GPU 利用率和独立显存没有可用读数。")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func detailsSection(_ snapshot: DeviceSnapshot) -> some View {
-        DisclosureGroup("更多设备信息") {
-            VStack(alignment: .leading, spacing: 12) {
-                LabeledContent("设备", value: UIDevice.current.model)
-                LabeledContent("硬件标识", value: monitor.hardwareIdentifier)
-                LabeledContent("系统", value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
-                LabeledContent("处理器核心数", value: String(ProcessInfo.processInfo.processorCount))
                 Divider()
-                LabeledContent("存储总容量", value: storage(snapshot.totalStorage))
-                LabeledContent("当前空闲", value: storage(snapshot.freeStorage))
-                LabeledContent("可用于下载", value: storage(snapshot.importantStorage))
-                Text(snapshot.storageError.map { "无法读取存储容量：\($0)" }
-                     ?? "可用于下载的空间包含系统可回收的缓存，可能高于当前空闲空间。")
-                    .font(.caption).foregroundStyle(.secondary)
-                Divider()
-                LabeledContent("网络", value: monitor.network?.connection ?? "正在读取…")
-                if let network = monitor.network {
-                    LabeledContent("高成本连接", value: network.expensive ? "是" : "否")
-                    LabeledContent("低数据模式", value: network.constrained ? "开启" : "关闭")
+                HStack {
+                    Label("本 App", systemImage: "square.3.layers.3d")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(bytes(snapshot.appMemory)).font(.headline).monospacedDigit()
+                        .accessibilityIdentifier("deviceMemoryValue")
                 }
-                Text("连接路径由系统报告，不代表互联网测速或某个网站可达。")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text("离开 App 或锁屏后暂停监测；恢复时重新采样。曲线空白表示这段时间没有有效读数。")
-                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(cardBackground, in: .rect(cornerRadius: 28))
+            .overlay(cardBorder)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("systemMemoryCard")
+    }
+
+    private func memoryValue(_ title: String, bytes value: UInt64?, prominent: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.subheadline).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value.map { String(format: "%.1f", Double($0) / 1_000_000_000) } ?? "—")
+                    .font(prominent ? .largeTitle.bold() : .title.bold())
+                if value != nil { Text("GB").font(.body).foregroundStyle(.secondary) }
+            }
+            .monospacedDigit()
+        }
+    }
+
+    private func memoryRing(_ fraction: Double?) -> some View {
+        ZStack {
+            Circle().trim(from: 0, to: 0.75)
+                .stroke(.secondary.opacity(0.22), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            if let fraction {
+                Circle().trim(from: 0, to: fraction * 0.75)
+                    .stroke(.orange, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+            }
+        }
+        .rotationEffect(.degrees(135))
+        .overlay {
+            Text(fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
+                .font(.largeTitle.bold()).monospacedDigit()
+        }
+        .frame(width: 138, height: 138)
+        .padding(5)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.35), value: fraction)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("整机 RAM 已用比例")
+        .accessibilityValue(fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "无法读取")
+        .accessibilityIdentifier("systemRAMGauge")
+    }
+
+    private func storageCard(_ snapshot: DeviceSnapshot) -> some View {
+        Button { detail = .storage } label: {
+            VStack(spacing: 16) {
+                layout {
+                    Label("剩余存储", systemImage: "internaldrive")
+                        .font(.body)
+                    Spacer(minLength: 0)
+                    Text(diskBytes(snapshot.freeStorage))
+                        .font(.title.bold()).monospacedDigit()
+                }
+                if let total = snapshot.totalStorage, total > 0, let free = snapshot.freeStorage {
+                    ProgressView(value: min(1, max(0, 1 - Double(free) / Double(total))))
+                        .tint(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(22)
+            .background(cardBackground, in: .rect(cornerRadius: 28))
+            .overlay(cardBorder)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("systemStorageCard")
+    }
+
+    private func statusCard(_ snapshot: DeviceSnapshot) -> some View {
+        Button { detail = .device } label: {
+            layout {
+                metric("App CPU", symbol: "cpu", value: snapshot.cpuPercent.map { "\(Int($0.rounded()))%" } ?? "—", color: .blue, id: "deviceCPUValue")
+                if !typeSize.isAccessibilitySize { Divider().frame(height: 44) }
+                metric("电池", symbol: snapshot.batteryState == "正在充电" ? "battery.100percent.bolt" : "battery.75percent", value: snapshot.batteryPercent.map { "\($0)%" } ?? "—", color: snapshot.lowPowerMode ? .orange : .green, id: "deviceBatteryValue")
+                if !typeSize.isAccessibilitySize { Divider().frame(height: 44) }
+                metric("热状态", symbol: "thermometer.medium", value: snapshot.thermalState, color: snapshot.thermalState == "正常" ? .mint : .orange, id: "deviceThermalValue")
+            }
+            .padding(20)
+            .background(cardBackground, in: .rect(cornerRadius: 28))
+            .overlay(cardBorder)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func metric(_ title: String, symbol: String, value: String, color: Color, id: String) -> some View {
+        VStack(alignment: typeSize.isAccessibilitySize ? .leading : .center, spacing: 12) {
+            HStack(spacing: 5) {
+                Image(systemName: symbol).foregroundStyle(color)
+                Text(title).foregroundStyle(.secondary)
             }
             .font(.subheadline)
-            .padding(.top, 12)
+            Text(value).font(.title2.bold()).monospacedDigit()
+                .accessibilityIdentifier(id)
         }
-        .accessibilityIdentifier("deviceDetails")
+        .frame(maxWidth: .infinity, alignment: typeSize.isAccessibilitySize ? .leading : .center)
     }
 
-    private var performanceSection: some View {
+    private var taskStatus: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("AI 推理性能").font(.headline)
-            if chat.performanceRecords.isEmpty {
-                Text("尚无记录").foregroundStyle(.secondary)
-            } else {
-                ForEach(chat.performanceRecords.reversed().prefix(10)) { record in
-                    NavigationLink {
-                        PerformanceDetail(record: record)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(record.modelName).font(.subheadline).lineLimit(2)
-                                Text(record.date.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption).foregroundStyle(.secondary)
-                                if let speed = record.tokensPerSecond {
-                                    Text("\(speed.formatted(.number.precision(.fractionLength(1)))) Tokens/s")
-                                        .font(.subheadline).monospacedDigit()
-                                }
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
+            Button { detail = .tasks } label: {
+                HStack {
+                    Text("运行状态")
+                    Spacer()
+                    Text(chat.isBusy ? "运行中" : "空闲").font(.title3.weight(.medium))
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 14)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("systemTaskStatus")
+            if chat.isBusy {
+                Text(library.models.first { $0.id == chat.lastModelID }?.name ?? "AI 任务")
+                    .font(.headline).lineLimit(2)
+                HStack {
+                    ProgressView()
+                    Text(chat.status).font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("停止", systemImage: "stop.fill") { chat.cancel() }
+                        .buttonStyle(.glass)
+                        .accessibilityIdentifier("stopSystemTask")
                 }
             }
-            Text("只记录实际完成的推理。Token 数与速度来自引擎统计，缺失时不作估算。")
-                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private func detailContent(_ selected: Detail) -> some View {
+        if let snapshot = monitor.snapshot {
+            switch selected {
+            case .memory:
+                Section("整机 RAM") {
+                    LabeledContent("总量", value: bytes(snapshot.physicalMemory))
+                    if let memory = snapshot.systemMemory {
+                        LabeledContent("已用", value: bytes(memory.used))
+                        LabeledContent("空闲", value: bytes(memory.free))
+                        LabeledContent("活跃", value: bytes(memory.active))
+                        LabeledContent("非活跃", value: bytes(memory.inactive))
+                        LabeledContent("有线", value: bytes(memory.wired))
+                        LabeledContent("压缩", value: bytes(memory.compressed))
+                    } else {
+                        Text("系统未返回整机内存统计。不会用 App 内存或进程预算替代。")
+                    }
+                }
+                Section("本 App") {
+                    LabeledContent("实际占用", value: bytes(snapshot.appMemory))
+                    LabeledContent("进程剩余预算", value: bytes(snapshot.availableMemory))
+                }
+                Section {
+                    Text("已用 = 总量 − Mach 空闲页（包含推测页）。已用中包含可回收缓存，不等于内存压力；各分类也不应简单相加。进程预算不是整机剩余 RAM。")
+                }
+            case .storage:
+                Section {
+                    LabeledContent("总容量", value: diskBytes(snapshot.totalStorage))
+                    LabeledContent("当前可用", value: diskBytes(snapshot.freeStorage))
+                    LabeledContent("重要用途可用", value: diskBytes(snapshot.importantStorage))
+                    if let error = snapshot.storageError { Text(error).foregroundStyle(.red) }
+                } footer: {
+                    Text("重要用途可用容量可能包含系统可清理的空间。首屏显示当前可用空间。")
+                }
+                LabeledContent("模型文件占用", value: diskBytes(library.totalBytes))
+            case .device:
+                Section("设备") {
+                    LabeledContent("型号", value: monitor.hardwareIdentifier)
+                    LabeledContent("系统", value: "iOS \(UIDevice.current.systemVersion)")
+                    LabeledContent("处理器核心", value: "\(ProcessInfo.processInfo.activeProcessorCount)")
+                    LabeledContent("网络", value: monitor.network?.connection ?? "不可用")
+                    LabeledContent("电池", value: snapshot.batteryState)
+                    LabeledContent("低电量模式", value: snapshot.lowPowerMode ? "开启" : "关闭")
+                    LabeledContent("热状态", value: snapshot.thermalState)
+                    Text("系统等级，非摄氏温度").foregroundStyle(.secondary)
+                }
+                Section("采样") {
+                    LabeledContent("状态", value: monitor.isSampling ? "前台监测中" : "已暂停")
+                    LabeledContent("更新时间", value: snapshot.date.formatted(date: .omitted, time: .standard))
+                    LabeledContent("最近样本", value: "\(monitor.history.count)")
+                    Text("前台每 2 秒采样，切换页面继续监测；进入后台后保留快照，回来立即刷新。App CPU 以单核心 100% 计，多线程可能超过 100%。")
+                }
+                Section("GPU") {
+                    LabeledContent("Metal 设备", value: monitor.metalDeviceName ?? "不可用")
+                    Text("没有整机 GPU 实时使用率或独立显存读数。")
+                }
+                #if targetEnvironment(simulator)
+                Section { Text("模拟器读数来自宿主 Mac，不能用于评估 iPhone 性能。电池与进程预算需要真机验证。") }
+                #endif
+            case .tasks:
+                if chat.isBusy { Section("当前任务") { Text(chat.status) } }
+                if chat.performanceRecords.isEmpty {
+                    ContentUnavailableView("暂无推理记录", systemImage: "clock")
+                } else {
+                    ForEach(chat.performanceRecords.reversed()) { record in
+                        Section(record.modelName) {
+                            LabeledContent("时间", value: record.date.formatted())
+                            LabeledContent("后端", value: record.backend)
+                            LabeledContent("量化", value: record.quantization ?? "未确认")
+                            if let seconds = record.loadSeconds { LabeledContent("加载", value: String(format: "%.2f s", seconds)) }
+                            if let seconds = record.firstTokenSeconds { LabeledContent("首 Token", value: String(format: "%.2f s", seconds)) }
+                            if let speed = record.tokensPerSecond { LabeledContent("生成速度", value: String(format: "%.1f tok/s", speed)) }
+                        }
+                    }
+                }
+            }
         }
     }
 
-    private func memory(_ value: UInt64?) -> String {
-        guard let value else { return "不可用" }
-        return ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .memory)
+    private var cardBackground: Color {
+        Color(uiColor: .secondarySystemGroupedBackground).opacity(reduceTransparency ? 1 : 0.88)
     }
 
-    private func storage(_ value: Int64?) -> String {
-        guard let value else { return "不可用" }
-        return ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+    private var cardBorder: some View {
+        RoundedRectangle(cornerRadius: 28)
+            .strokeBorder(.primary.opacity(contrast == .increased ? 0.3 : 0.06), lineWidth: 1)
+            .allowsHitTesting(false)
     }
 
-    private func cpuText(_ value: Double?) -> String {
-        guard let value else { return "采样中…" }
-        return "\(value.formatted(.number.precision(.fractionLength(1))))%"
-    }
-}
-
-private struct PerformanceDetail: View {
-    let record: InferenceRecord
-
-    var body: some View {
-        List {
-            LabeledContent("模型", value: record.modelName)
-            LabeledContent("量化", value: record.quantization ?? "尚未确认")
-            LabeledContent("后端", value: record.backend)
-            LabeledContent("时间", value: record.date.formatted(date: .abbreviated, time: .standard))
-            LabeledContent("最近一次加载", value: seconds(record.loadSeconds))
-            LabeledContent("首 Token 延迟", value: seconds(record.firstTokenSeconds))
-            LabeledContent("生成速度", value: record.tokensPerSecond.map {
-                "\($0.formatted(.number.precision(.fractionLength(2)))) Tokens/s"
-            } ?? "引擎未提供")
-            LabeledContent("输出 Token", value: record.outputTokens.map(String.init) ?? "引擎未提供")
-        }
-        .navigationTitle("推理记录")
-        .navigationBarTitleDisplayMode(.inline)
+    private func bytes(_ value: UInt64?) -> String {
+        value.map { ByteCountFormatter.string(fromByteCount: Int64(clamping: $0), countStyle: .file) } ?? "—"
     }
 
-    private func seconds(_ value: Double?) -> String {
-        value.map { "\($0.formatted(.number.precision(.fractionLength(2)))) 秒" } ?? "引擎未提供"
+    private func diskBytes(_ value: Int64?) -> String {
+        value.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "—"
     }
 }

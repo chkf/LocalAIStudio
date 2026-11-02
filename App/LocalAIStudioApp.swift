@@ -39,7 +39,7 @@ private struct MainView: View {
             Tab("生图", systemImage: "photo", value: Page.generate) {
                 GeneratePage(openModels: { selection = .models })
             }
-            Tab("设备", systemImage: "waveform.path.ecg", value: Page.device) {
+            Tab("System", systemImage: "waveform.path.ecg", value: Page.device) {
                 DevicePage()
             }
             Tab("模型", systemImage: "square.stack.3d.up", value: Page.models) {

@@ -4,7 +4,6 @@ struct ModelsPage: View {
     @Environment(ModelLibrary.self) private var library
     @Environment(ChatSession.self) private var chat
     @State private var importing = false
-    @State private var pendingImportURL: URL?
     @State private var downloading = false
     @State private var query = ""
     @State private var pendingDelete: LocalModel?
@@ -106,10 +105,12 @@ struct ModelsPage: View {
                     .accessibilityIdentifier("addModel")
                 }
             }
-            .sheet(isPresented: $importing, onDismiss: importSelectedFile) {
+            .sheet(isPresented: $importing) {
                 ModelDocumentPicker { url in
-                    pendingImportURL = url
                     importing = false
+                    // Do not depend on the order of UIKit selection and SwiftUI dismissal.
+                    // Consume the selected URL directly; cancellation has no URL.
+                    if let url { Task { await library.importFiles([url]) } }
                 }
             }
             .sheet(isPresented: $downloading) { DownloadSheet() }
@@ -130,13 +131,6 @@ struct ModelsPage: View {
                 Text("这会释放模型占用的存储空间。导入前的原始文件不会被删除。")
             }
         }
-    }
-
-    private func importSelectedFile() {
-        guard let url = pendingImportURL else { return }
-        pendingImportURL = nil
-        // Let the picker close before showing import progress or presenting an error alert.
-        Task { await library.importFiles([url]) }
     }
 }
 

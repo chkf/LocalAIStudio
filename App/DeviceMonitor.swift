@@ -7,6 +7,7 @@ import UIKit
 import os
 
 struct DeviceSnapshot {
+    let systemMemory = SystemMemory.read()
     let date: Date
     let physicalMemory: UInt64
     let appMemory: UInt64?
