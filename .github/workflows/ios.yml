@@ -2,12 +2,6 @@ name: Build unsigned iOS IPA
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "App/**"
-      - "project.yml"
-      - ".github/workflows/ios.yml"
 
 jobs:
   build:
