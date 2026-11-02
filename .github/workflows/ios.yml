@@ -43,60 +43,6 @@ jobs:
             --notices --warnings --errors
           test -s build/icon/Assets.car
 
-      - name: Isolate icon document decoding
-        if: ${{ failure() }}
-        run: |
-          python3 - <<'PY'
-          import copy, json, pathlib, shutil, subprocess
-          source = pathlib.Path('Resources/AppIcon.icon')
-          original = json.loads((source / 'icon.json').read_text())
-          developer = pathlib.Path(subprocess.check_output(['xcode-select', '-p'], text=True).strip())
-          ictool = developer.parent / 'Applications/Icon Composer.app/Contents/Executables/ictool'
-          subprocess.run([str(ictool), '--version'], check=False)
-          subprocess.run([str(ictool), '--help'], check=False)
-          variants = {}
-          extended = copy.deepcopy(original)
-          extended['fill-specializations'][0]['value']['automatic-gradient'] = 'extended-srgb:0.98431,0.99216,0.99608,1.00000'
-          variants['extended-color'] = extended
-          untagged = copy.deepcopy(original)
-          untagged.pop('color-space-for-untagged-svg-colors')
-          variants['without-color-space'] = untagged
-          legacy = copy.deepcopy(original)
-          legacy.pop('features')
-          variants['without-features'] = legacy
-          light = copy.deepcopy(original)
-          light['fill'] = light.pop('fill-specializations')[0]['value']
-          variants['light-only'] = light
-          minimal = {
-              'fill': {'automatic-gradient': 'extended-srgb:1.00000,1.00000,1.00000,1.00000'},
-              'groups': [{'layers': [{'image-name': layer['image-name'], 'name': layer['name'], 'glass': False}]} for group in original['groups'] for layer in group['layers']],
-              'supported-platforms': {'squares': 'shared'}
-          }
-          variants['minimal-four-svg'] = minimal
-          for name in ['04-AI.svg', '03-FrostedGlass.svg', '02-GreenGlass.svg', '01-BlueGlass.svg', 'Reference.png']:
-              one = copy.deepcopy(minimal)
-              one['groups'] = [{'layers': [{'image-name': name, 'name': name, 'glass': False}]}]
-              variants['single-' + name.split('.')[0]] = one
-          for label, manifest in variants.items():
-              work = pathlib.Path('build/icon-diagnosis') / label
-              bundle = work / 'AppIcon.icon'
-              shutil.copytree(source, bundle)
-              if label == 'single-Reference':
-                  shutil.copyfile('docs/app-icon-reference.png', bundle / 'Assets/Reference.png')
-              (bundle / 'icon.json').write_text(json.dumps(manifest))
-              output = work / 'compiled'
-              output.mkdir()
-              command = ['xcrun', 'actool', str(bundle), '--compile', str(output),
-                         '--platform', 'iphoneos', '--minimum-deployment-target', '26.0',
-                         '--target-device', 'iphone', '--app-icon', 'AppIcon',
-                         '--bundle-identifier', 'dev.example.localaistudio',
-                         '--output-partial-info-plist', str(output / 'Info.plist'),
-                         '--output-format', 'human-readable-text', '--errors']
-              result = subprocess.run(command, text=True, capture_output=True)
-              print(f'=== {label}: returncode={result.returncode} ===', flush=True)
-              print(result.stdout[-2000:], result.stderr[-2000:], flush=True)
-          PY
-
       - name: Render Apple material previews
         run: |
           icon_developer_dir="$(xcode-select -p)"
@@ -110,14 +56,12 @@ jobs:
               --rendition "$appearance" \
               --width 1024 --height 1024 --scale 1
           done
-          for angle in 45 225; do
-            "$icon_tool" Resources/AppIcon.icon \
-              --export-image \
-              --output-file "build/icon/preview-light-${angle}.png" \
-              --platform iOS --rendition Default \
-              --width 1024 --height 1024 --scale 1 \
-              --light-angle "$angle"
-          done
+          "$icon_tool" Resources/AppIcon.icon \
+            --export-image \
+            --output-file build/icon/preview-Default-iOS26.png \
+            --platform iOS --rendition Default \
+            --width 1024 --height 1024 --scale 1 \
+            --design-generation 26
 
       - uses: actions/upload-artifact@v4
         with:

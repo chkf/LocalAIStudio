@@ -28,7 +28,7 @@ Xcode 27 to:
 - Compile `Assets.car`, the fallback app icon images, and the partial Info.plist.
 - Export Apple-rendered Default, Dark, TintedLight, TintedDark, ClearLight, and
   ClearDark previews at 1024 × 1024.
-- Export two Default previews at different light angles to inspect highlights.
+- Export an additional iOS 26 Default preview for system-version comparison.
 - Upload the compiled files, previews, and editable source together as
   **LocalAIStudio-IconComposer**.
 
