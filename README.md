@@ -41,6 +41,12 @@ Develop from Windows/WSL2 and use the macOS GitHub Actions runner for Xcode buil
 4. Unit tests and UI tests on an available iOS 26 iPhone simulator, including tab/background monitoring, settings persistence and actual Files selection/import/error/cancel interaction.
 5. Upload of the IPA, test results/logs and UI screenshots.
 
+GitHub downloads the `LocalAIStudio-unsigned` artifact as a ZIP archive containing
+`LocalAIStudio-unsigned.ipa`. Extract the outer ZIP once, then pass the **IPA**
+to your local signing tool. The IPA itself is an archive and should remain
+intact for signing. CI checks its ZIP integrity, executable, embedded LiteRT-LM
+framework and app version metadata before uploading it.
+
 The LiteRT-LM dependency is pinned to the official v0.18.1 commit rather than a floating branch; see [the dependency explanation](docs/INFERENCE.md). Model weights are not included.
 
 On a Mac with Xcode 26 and XcodeGen:

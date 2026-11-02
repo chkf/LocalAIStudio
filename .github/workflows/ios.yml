@@ -50,6 +50,18 @@ jobs:
           mkdir -p Payload
           cp -R DerivedData/Build/Products/Release-iphoneos/LocalAIStudio.app Payload/
           zip -qr LocalAIStudio-unsigned.ipa Payload
+          python3 - <<'PY'
+          import plistlib, zipfile
+          with zipfile.ZipFile('LocalAIStudio-unsigned.ipa') as ipa:
+              app = 'Payload/LocalAIStudio.app/'
+              info = plistlib.loads(ipa.read(app + 'Info.plist'))
+              for key in ('CFBundleVersion', 'CFBundleShortVersionString'):
+                  assert info.get(key), f'Missing {key} from app bundle'
+              assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
+              assert ipa.getinfo(app + 'Frameworks/CLiteRTLM.framework/CLiteRTLM').file_size > 0
+              assert ipa.testzip() is None, 'Corrupt IPA entry'
+          print('Unsigned IPA structure and app version metadata verified.')
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
