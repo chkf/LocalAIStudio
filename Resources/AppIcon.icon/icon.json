@@ -1,0 +1,24 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "01-GlossyArtwork.png",
+          "name": "Glossy artwork",
+          "glass": false
+        }
+      ],
+      "lighting": "individual",
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

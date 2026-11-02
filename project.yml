@@ -2,6 +2,10 @@ name: LocalAIStudio
 options:
   deploymentTarget:
     iOS: "26.0"
+  fileTypes:
+    icon:
+      file: true
+      buildPhase: resources
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -16,7 +20,9 @@ targets:
     platform: iOS
     sources:
       - App
-      - Resources/Assets.xcassets
+      - path: Resources/AppIcon.icon
+        type: file
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.example.localaistudio

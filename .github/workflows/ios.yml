@@ -3,6 +3,11 @@ name: Build unsigned iOS IPA
 on:
   workflow_dispatch:
     inputs:
+      icon_only:
+        description: "Compile only the Icon Composer .icon asset (faster)"
+        required: false
+        type: boolean
+        default: false
       run_tests:
         description: "Run iOS simulator tests (slower)"
         required: false
@@ -10,7 +15,37 @@ on:
         default: false
 
 jobs:
+  icon:
+    if: ${{ inputs.icon_only }}
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile Icon Composer artwork
+        run: |
+          mkdir -p build/icon
+          xcrun actool Resources/AppIcon.icon \
+            --compile build/icon \
+            --platform iphoneos \
+            --minimum-deployment-target 26.0 \
+            --target-device iphone \
+            --app-icon AppIcon \
+            --bundle-identifier dev.example.localaistudio \
+            --output-format human-readable-text \
+            --output-partial-info-plist build/icon/icon-partial-info.plist \
+            --notices --warnings --errors
+          test -s build/icon/Assets.car
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalAIStudio-IconComposer
+          path: |
+            build/icon/Assets.car
+            build/icon/icon-partial-info.plist
+            Resources/AppIcon.icon
+
   build:
+    if: ${{ !inputs.icon_only }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
