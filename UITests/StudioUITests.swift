@@ -32,11 +32,11 @@ final class StudioUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["系统等级，非摄氏温度"].exists)
         snapshot(app, "System-details")
         app.buttons["closeDeviceDetails"].tap()
-        app.buttons["systemMemoryCard"].tap()
+        app.otherElements["systemMemoryCard"].buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["内存"].waitForExistence(timeout: 5))
         snapshot(app, "System-memory-details")
         app.buttons["closeDeviceDetails"].tap()
-        app.buttons["systemStorageCard"].tap()
+        app.otherElements["systemStorageCard"].buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars["存储"].waitForExistence(timeout: 5))
         app.buttons["closeDeviceDetails"].tap()
     }
@@ -47,23 +47,22 @@ final class StudioUITests: XCTestCase {
         app.launch()
         app.tabBars.buttons["System"].tap()
         let cpu = app.staticTexts["deviceCPUValue"]
-        let count = app.buttons["deviceDetailsButton"]
-        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["deviceDetailsButton"].waitForExistence(timeout: 10))
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             cpu.exists && cpu.label.contains("%")
         }, object: nil)
         wait(for: [ready], timeout: 10)
-        let beforeSwitch = try sampleCount(count)
+        let beforeSwitch = try sampleCount(app)
 
         app.tabBars.buttons["AI"].tap()
         // Observe another tab without Device view lifecycle callbacks.
         Thread.sleep(forTimeInterval: 15)
         app.tabBars.buttons["System"].tap()
         XCTAssertTrue(cpu.label.contains("%"), "Switching tabs must not discard the last valid CPU value.")
-        XCTAssertGreaterThanOrEqual(try sampleCount(count), beforeSwitch + 6)
+        XCTAssertGreaterThanOrEqual(try sampleCount(app), beforeSwitch + 6)
         snapshot(app, "System-after-tab-switch")
 
-        let beforeBackground = try sampleCount(count)
+        let beforeBackground = try sampleCount(app)
         XCUIDevice.shared.press(.home)
         let backgrounded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             app.state == .runningBackground || app.state == .runningBackgroundSuspended
@@ -72,12 +71,17 @@ final class StudioUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 3)
         app.activate()
         XCTAssertTrue(cpu.label.contains("%"), "Resume must retain the last CPU value while rebuilding its baseline.")
-        XCTAssertGreaterThanOrEqual(try sampleCount(count), beforeBackground)
+        app.buttons["deviceDetailsButton"].tap()
+        let count = app.descendants(matching: .any)["deviceSampleCount"]
+        XCTAssertTrue(count.waitForExistence(timeout: 10), app.debugDescription)
+        let afterResume = try countValue(count)
+        XCTAssertGreaterThanOrEqual(afterResume, beforeBackground)
         let resumed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             guard let value = count.value as? String, let number = Int(value) else { return false }
-            return number > beforeBackground + 1
+            return number > afterResume + 1
         }, object: nil)
         wait(for: [resumed], timeout: 10)
+        app.buttons["closeDeviceDetails"].tap()
         snapshot(app, "System-after-background")
     }
 
@@ -143,9 +147,19 @@ final class StudioUITests: XCTestCase {
     }
 
     @MainActor
-    private func sampleCount(_ element: XCUIElement) throws -> Int {
-        let value = try XCTUnwrap(element.value as? String)
-        return try XCTUnwrap(Int(value))
+    private func sampleCount(_ app: XCUIApplication) throws -> Int {
+        // Read the real counter in details, not a toolbar button's system-owned value.
+        app.buttons["deviceDetailsButton"].tap()
+        defer { app.buttons["closeDeviceDetails"].tap() }
+        let counter = app.descendants(matching: .any)["deviceSampleCount"]
+        XCTAssertTrue(counter.waitForExistence(timeout: 10), app.debugDescription)
+        return try countValue(counter)
+    }
+
+    @MainActor
+    private func countValue(_ element: XCUIElement) throws -> Int {
+        let value = try XCTUnwrap(element.value as? String, element.debugDescription)
+        return try XCTUnwrap(Int(value), "Unexpected sample counter: \(value)")
     }
 
     @MainActor

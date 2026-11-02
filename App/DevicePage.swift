@@ -58,7 +58,6 @@ struct DevicePage: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("设备信息", systemImage: "info.circle") { detail = .device }
                         .accessibilityIdentifier("deviceDetailsButton")
-                        .accessibilityValue("\(monitor.history.count)")
                 }
             }
             .sheet(item: $detail) { selected in
@@ -134,6 +133,7 @@ struct DevicePage: View {
             Text(fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
                 .font(.largeTitle.bold()).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.35)
+                .padding(.horizontal, 14)
         }
         .frame(width: 138, height: 138)
         .padding(5)
@@ -191,6 +191,7 @@ struct DevicePage: View {
             HStack(spacing: 5) {
                 Image(systemName: symbol).foregroundStyle(color)
                 Text(title).foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             .font(.subheadline)
             Text(value).font(.title2.bold()).monospacedDigit()
@@ -280,6 +281,10 @@ struct DevicePage: View {
                     LabeledContent("状态", value: monitor.isSampling ? "前台监测中" : "已暂停")
                     LabeledContent("更新时间", value: snapshot.date.formatted(date: .omitted, time: .standard))
                     LabeledContent("最近样本", value: "\(monitor.history.count)")
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("最近样本")
+                        .accessibilityValue("\(monitor.history.count)")
+                        .accessibilityIdentifier("deviceSampleCount")
                     Text("前台每 2 秒采样，切换页面继续监测；进入后台后保留快照，回来立即刷新。App CPU 以单核心 100% 计，多线程可能超过 100%。")
                 }
                 Section("GPU") {
