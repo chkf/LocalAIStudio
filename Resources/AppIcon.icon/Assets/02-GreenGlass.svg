@@ -7,27 +7,54 @@
       <stop offset=".66" stop-color="#00D96A"/>
       <stop offset="1" stop-color="#00D94D"/>
     </linearGradient>
-    <radialGradient id="upper" cx="868" cy="325" r="245" gradientUnits="userSpaceOnUse">
+    <radialGradient id="upper" cx="868" cy="325" r="210" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#BCFFD6" stop-opacity=".88"/>
       <stop offset=".40" stop-color="#ABFFD1" stop-opacity=".67"/>
-      <stop offset=".77" stop-color="#77FFC2" stop-opacity=".12"/>
+      <stop offset=".77" stop-color="#77FFC2" stop-opacity=".06"/>
       <stop offset="1" stop-color="#77FFC2" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="lower" cx="858" cy="776" r="308" gradientUnits="userSpaceOnUse">
+    <radialGradient id="lower" cx="858" cy="776" r="270" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#C7FFD6" stop-opacity=".80"/>
       <stop offset=".36" stop-color="#A2FFCF" stop-opacity=".61"/>
-      <stop offset=".75" stop-color="#6CFFCD" stop-opacity=".23"/>
+      <stop offset=".75" stop-color="#6CFFCD" stop-opacity=".08"/>
       <stop offset="1" stop-color="#6CFFCD" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="bottom" cx="662" cy="917" r="224" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#54FCD0" stop-opacity=".68"/>
+      <stop offset="0" stop-color="#54FCD0" stop-opacity=".50"/>
       <stop offset="1" stop-color="#54FCD0" stop-opacity="0"/>
     </radialGradient>
+
+    <radialGradient id="sheen" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(172.07 -245.75 53.24 37.28 900 738)">
+      <stop offset="0" stop-color="#EEFFDD" stop-opacity=".48"/>
+      <stop offset=".36" stop-color="#E8FFE1" stop-opacity=".32"/>
+      <stop offset=".70" stop-color="#D8FFE7" stop-opacity=".07"/>
+      <stop offset="1" stop-color="#D8FFE7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim-light" x1="670" y1="240" x2="1000" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#55FF9F" stop-opacity=".42"/>
+      <stop offset=".20" stop-color="#F4FFF0" stop-opacity=".96"/>
+      <stop offset=".43" stop-color="#88FFC1" stop-opacity=".15"/>
+      <stop offset=".64" stop-color="#EFFFF0" stop-opacity=".93"/>
+      <stop offset=".84" stop-color="#DFFFEA" stop-opacity=".82"/>
+      <stop offset="1" stop-color="#8FFFE6" stop-opacity=".30"/>
+    </linearGradient>
+    <linearGradient id="rim-color" x1="740" y1="230" x2="680" y2="957" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00CA33" stop-opacity=".92"/>
+      <stop offset=".42" stop-color="#00BB55" stop-opacity=".76"/>
+      <stop offset=".75" stop-color="#00BA90" stop-opacity=".70"/>
+      <stop offset="1" stop-color="#00C49F" stop-opacity=".78"/>
+    </linearGradient>
   </defs>
   <path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z" fill="url(#color)"/>
   <g clip-path="url(#clip)">
     <path d="M0 0H1024V1024H0Z" fill="url(#upper)"/>
     <path d="M0 0H1024V1024H0Z" fill="url(#lower)"/>
     <path d="M0 0H1024V1024H0Z" fill="url(#bottom)"/>
+    <path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z" fill="url(#sheen)"/>
+    <path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z" fill="none" stroke="url(#rim-light)" stroke-width="26" opacity=".13"/>
+    <path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z" fill="none" stroke="url(#rim-light)" stroke-width="20" opacity=".24"/>
+    <path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z" fill="none" stroke="url(#rim-light)" stroke-width="14" opacity=".40"/>
+    <path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z" fill="none" stroke="url(#rim-light)" stroke-width="8" opacity=".82"/>
+    <path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z" fill="none" stroke="url(#rim-color)" stroke-width="2"/>
   </g>
 </svg>

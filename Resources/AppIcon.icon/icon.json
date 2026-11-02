@@ -49,11 +49,11 @@
       "specular": true,
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.18
+        "opacity": 0.08
       },
       "translucency": {
         "enabled": true,
-        "value": 0.22
+        "value": 0.1
       }
     },
     {
@@ -74,11 +74,11 @@
       "specular": true,
       "shadow": {
         "kind": "layer-color",
-        "opacity": 0.18
+        "opacity": 0.08
       },
       "translucency": {
         "enabled": true,
-        "value": 0.12
+        "value": 0.04
       }
     },
     {
@@ -99,11 +99,11 @@
       "specular": true,
       "shadow": {
         "kind": "layer-color",
-        "opacity": 0.18
+        "opacity": 0.08
       },
       "translucency": {
         "enabled": true,
-        "value": 0.12
+        "value": 0.04
       }
     }
   ],

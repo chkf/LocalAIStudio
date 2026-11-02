@@ -8,10 +8,12 @@
 3. `02-GreenGlass.svg`: the green rear lens.
 4. `01-BlueGlass.svg`: the blue rear lens.
 
-The glass layers contain their own shapes and colors, with no embedded PNG,
-background rectangle, or duplicated AI lettering. Icon Composer applies
-specular highlights, refraction, translucency, and shadows to the three glass
-groups independently. The selected raster reference remains at
+The glass layers contain their own shapes, colors, gradient rims, and soft
+reflection bands, with no embedded PNG, background rectangle, or duplicated
+AI lettering. These vector details preserve the selected artwork's gloss;
+Icon Composer additionally applies specular highlights, refraction,
+translucency, and shadows to the three glass groups independently. The
+selected raster reference remains at
 `docs/app-icon-reference.png`; it is not packaged as an icon layer.
 
 ## Compile and inspect
@@ -43,8 +45,9 @@ the Xcode 27 toolchain. The app's deployment target remains iOS 26. Refraction
 has no visible effect on iOS versions earlier than 27; the system still renders
 the supported glass properties and fallbacks.
 
-Ordinary SVG previews show geometry and color only. They are not previews of
-Apple's glass material. `ictool` exports include Apple's material rendering,
+Ordinary SVG previews show the vector geometry, colors, and fixed reflection
+details. They do not include Apple's glass material. `ictool` exports include
+Apple's material rendering,
 but Clear previews do not reproduce the live Home Screen wallpaper interaction.
 The vector version must be judged from those rendered exports and an iPhone,
 not described as pixel-identical to the original image.
