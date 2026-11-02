@@ -2,6 +2,10 @@ name: LocalAIStudio
 options:
   deploymentTarget:
     iOS: "26.0"
+  fileTypes:
+    icon:
+      file: true
+      buildPhase: resources
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -16,11 +20,15 @@ targets:
     platform: iOS
     sources:
       - App
+      - path: Resources/AppIcon.icon
+        type: file
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.example.localaistudio
         INFOPLIST_KEY_CFBundleDisplayName: Local AI Studio
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 schemes:
   LocalAIStudio:
     build:

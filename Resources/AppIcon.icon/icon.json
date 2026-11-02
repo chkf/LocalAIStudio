@@ -1,0 +1,100 @@
+{
+  "features": [
+    "refractivity"
+  ],
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.98431,0.99216,0.99608,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "04-AI.svg",
+          "name": "AI"
+        }
+      ],
+      "lighting": "individual",
+      "shadow": {
+        "kind": "none",
+        "opacity": 0.0
+      }
+    },
+    {
+      "blur-material": 0.18,
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "03-FrostedGlass.svg",
+          "name": "Frosted glass"
+        }
+      ],
+      "lighting": "individual",
+      "refractivity": {
+        "depth": 0.32,
+        "enabled": true,
+        "strength": 0.38
+      },
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.16
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.48
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "02-GreenGlass.svg",
+          "name": "Green glass"
+        }
+      ],
+      "lighting": "individual",
+      "refractivity": {
+        "depth": 0.27,
+        "enabled": true,
+        "strength": 0.36
+      },
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.22
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.28
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "01-BlueGlass.svg",
+          "name": "Blue glass"
+        }
+      ],
+      "lighting": "individual",
+      "refractivity": {
+        "depth": 0.27,
+        "enabled": true,
+        "strength": 0.36
+      },
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.22
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.28
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

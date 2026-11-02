@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="blue" x1="0" y1="1" x2="0.8" y2="0">
+      <stop stop-color="#0A76F5"/><stop offset="0.55" stop-color="#32B6F8"/><stop offset="1" stop-color="#69DEF6"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0.1" y1="0.9" x2="0.9" y2="0.1">
+      <stop stop-color="#11B9A7"/><stop offset="0.55" stop-color="#2FE0AE"/><stop offset="1" stop-color="#4AE775"/>
+    </linearGradient>
+    <linearGradient id="frost" x1="0.1" y1="0" x2="0.85" y2="1">
+      <stop stop-color="#FAFDFF" stop-opacity="0.78"/><stop offset="0.5" stop-color="#F6F7F3" stop-opacity="0.85"/><stop offset="1" stop-color="#E9FFF7" stop-opacity="0.74"/>
+    </linearGradient>
+    <filter id="shadow" x="-0.1" y="-0.1" width="1.2" height="1.2"><feGaussianBlur stdDeviation="11"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="#FBFDFE"/>
+  <path d="M42 323C25 209 121 92 281 79C453 52 643 139 734 292C797 394 748 508 682 594C590 701 481 749 332 752C180 755 67 657 32 527C14 458 15 397 42 323Z" fill="#437BAA" opacity="0.12" filter="url(#shadow)" transform="translate(0 10)"/>
+  <path d="M42 323C25 209 121 92 281 79C453 52 643 139 734 292C797 394 748 508 682 594C590 701 481 749 332 752C180 755 67 657 32 527C14 458 15 397 42 323Z" fill="url(#blue)" opacity="0.91" stroke="#C9F4FF" stroke-width="6"/>
+  <path d="M476 291C584 183 752 181 875 247C1028 330 1020 557 950 713C895 846 777 921 651 916C491 912 392 814 357 674C326 542 380 395 476 291Z" fill="url(#green)" opacity="0.83" stroke="#BDFBE6" stroke-width="6"/>
+  <path d="M169 419C290 321 491 235 651 240C790 244 832 367 779 520C716 702 531 788 350 747C214 718 111 625 137 520C144 480 148 448 169 419Z" fill="url(#frost)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="6"/>
+  <g fill="none" stroke="#25445F" stroke-width="66" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M320 688L433 374Q442 351 450 374L562 688"/>
+    <path d="M376 579H508"/>
+  </g>
+  <rect x="632" y="343" width="72" height="378" rx="24" fill="#25445F"/>
+</svg>
