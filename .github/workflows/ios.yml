@@ -1,0 +1,45 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "App/**"
+      - "project.yml"
+      - ".github/workflows/ios.yml"
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build iPhone app without signing
+        run: |
+          xcodebuild \
+            -project LocalAIStudio.xcodeproj \
+            -scheme LocalAIStudio \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          cp -R DerivedData/Build/Products/Release-iphoneos/LocalAIStudio.app Payload/
+          zip -qr LocalAIStudio-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LocalAIStudio-unsigned
+          path: LocalAIStudio-unsigned.ipa
