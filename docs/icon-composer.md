@@ -4,8 +4,8 @@
 overlapping translucent lenses and separate lettering. Its three 1024 × 1024
 SVG layers are ordered front to back:
 
-1. `04-AI.svg`: outlined dark blue-gray lettering, light ink in Dark appearance;
-   glass effects disabled.
+1. `04-AI.svg`: outlined dark blue-gray lettering, light ink in Dark and Mono
+   appearances; glass effects disabled.
 2. `02-GreenGlass.svg`: the green lens, with group opacity 0.54.
 3. `01-BlueGlass.svg`: the blue lens, with group opacity 0.66.
 
@@ -15,10 +15,11 @@ panel. The two shapes extend inward so their intersection frames the AI.
 
 The SVGs contain opaque base colors with soft local reflection and edge details;
 Icon Composer's group opacity creates the uniform transparency. Directional
-material translucency is disabled to keep it separate from opacity. Mild native
-refraction remains enabled, while specular rims and cast shadows are disabled
-to avoid hard outlines. The artwork contains no embedded PNG, background
-rectangle, or duplicated AI lettering.
+material translucency is disabled to keep it separate from opacity. Refraction,
+specular rims, and cast shadows are disabled: refraction caused visible hooks
+at the two crossing points, while bright rims made the boundaries too hard.
+The artwork contains no embedded PNG, background rectangle, or duplicated AI
+lettering.
 
 `docs/app-icon-reference.png` remains as the earlier color and composition
 reference. The current design follows the clarified two-lens overlap direction;
@@ -48,10 +49,9 @@ and install it on the iPhone. No signing material is needed in GitHub.
 
 ## Rendering and verification
 
-The source uses Icon Composer's `refractivity` feature and therefore requires
-the Xcode 27 toolchain. The app's deployment target remains iOS 26. Refraction
-has no visible effect on iOS versions earlier than 27; the system still renders
-the supported glass properties and fallbacks.
+The source is validated with Xcode 27 and retains that toolchain's material
+schema, with refraction disabled. The app's deployment target remains iOS 26;
+the additional iOS 26 preview checks the earlier system design generation.
 
 Ordinary SVG previews show the vector geometry, colors, and fixed reflection
 details. They do not include Apple's glass material. `ictool` exports include

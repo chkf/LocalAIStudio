@@ -30,6 +30,12 @@
               "value": {
                 "solid": "srgb:0.91765,0.98431,1.00000,1.00000"
               }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1.00000,1.00000"
+              }
             }
           ]
         }
@@ -53,7 +59,7 @@
       "lighting": "individual",
       "refractivity": {
         "depth": 0.08,
-        "enabled": true,
+        "enabled": false,
         "strength": 0.1
       },
       "specular": false,
@@ -79,7 +85,7 @@
       "lighting": "individual",
       "refractivity": {
         "depth": 0.08,
-        "enabled": true,
+        "enabled": false,
         "strength": 0.1
       },
       "specular": false,
