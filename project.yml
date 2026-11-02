@@ -10,17 +10,47 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     CODE_SIGN_STYLE: Manual
 
+packages:
+  LiteRTLM:
+    url: https://github.com/google-ai-edge/LiteRT-LM.git
+    # The v0.19.0 tag still references v0.18.1 binaries; this is its upstream manifest fix.
+    revision: c642af8627ebdab909d7ba0e33a121d601b3c255
+
 targets:
   LocalAIStudio:
     type: application
     platform: iOS
     sources:
       - App
+    dependencies:
+      - package: LiteRTLM
+        product: LiteRTLM
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.example.localaistudio
         INFOPLIST_KEY_CFBundleDisplayName: Local AI Studio
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  LocalAIStudioTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: LocalAIStudio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.localaistudio.tests
+  LocalAIStudioUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: LocalAIStudio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.localaistudio.uitests
+        TEST_TARGET_NAME: LocalAIStudio
 schemes:
   LocalAIStudio:
     build:
@@ -28,5 +58,10 @@ schemes:
         LocalAIStudio: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - LocalAIStudioTests
+        - LocalAIStudioUITests
     archive:
       config: Release

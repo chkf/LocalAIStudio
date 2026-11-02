@@ -1,17 +1,32 @@
-name: Build unsigned iOS IPA
+name: Build and test iOS app
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
       - "App/**"
+      - "Tests/**"
+      - "UITests/**"
       - "project.yml"
       - ".github/workflows/ios.yml"
 
+permissions:
+  contents: read
+
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-26
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -23,6 +38,7 @@ jobs:
 
       - name: Build iPhone app without signing
         run: |
+          set -o pipefail
           xcodebuild \
             -project LocalAIStudio.xcodeproj \
             -scheme LocalAIStudio \
@@ -31,7 +47,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build 2>&1 | tee build.log
 
       - name: Package unsigned IPA
         run: |
@@ -43,3 +59,67 @@ jobs:
         with:
           name: LocalAIStudio-unsigned
           path: LocalAIStudio-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Select an available iOS 26 iPhone simulator
+        id: simulator
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          devices = json.loads(subprocess.check_output([
+              'xcrun', 'simctl', 'list', 'devices', 'available', '--json'
+          ]))['devices']
+          iphones = [device for runtime, items in devices.items()
+                     if '.iOS-26-' in runtime
+                     for device in items if device['name'].startswith('iPhone')]
+          if not iphones:
+              raise SystemExit('No available iOS 26 iPhone simulator on this runner')
+          device = iphones[0]
+          print(f"Using {device['name']}: {device['udid']}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"id={device['udid']}\n")
+          PY
+
+      - name: Run unit and UI tests
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project LocalAIStudio.xcodeproj \
+            -scheme LocalAIStudio \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            -destination-timeout 120 \
+            -derivedDataPath DerivedData \
+            -resultBundlePath TestResults.xcresult \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test 2>&1 | tee test.log
+
+      - name: Export test screenshots
+        if: always()
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path TestResults.xcresult \
+              --output-path Screenshots
+          fi
+
+      - name: Upload test screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalAIStudio-screenshots
+          path: Screenshots
+          if-no-files-found: warn
+
+      - name: Upload build logs and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalAIStudio-test-results
+          path: |
+            build.log
+            test.log
+            TestResults.xcresult
+          if-no-files-found: warn

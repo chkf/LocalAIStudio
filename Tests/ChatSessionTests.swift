@@ -1,0 +1,80 @@
+import XCTest
+@testable import LocalAIStudio
+
+@MainActor
+final class ChatSessionTests: XCTestCase {
+    private func directory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try FileManager.default.removeItem(at: directory) }
+        return directory
+    }
+
+    func testDraftSurvivesRelaunchAndClear() async throws {
+        let folder = try directory()
+        let session = ChatSession(directory: folder)
+        session.draft = "A draft that has not been sent"
+        session.saveDraft()
+        XCTAssertNil(session.errorMessage)
+
+        let restored = ChatSession(directory: folder)
+        XCTAssertEqual(restored.draft, session.draft)
+        await restored.clear()
+
+        let cleared = ChatSession(directory: folder)
+        XCTAssertEqual(cleared.draft, "")
+        XCTAssertTrue(cleared.messages.isEmpty)
+        XCTAssertFalse(cleared.isBusy)
+    }
+
+    func testInterruptedInputIsRestoredWithoutResumingInference() throws {
+        let folder = try directory()
+        let messageID = UUID()
+        let modelID = UUID()
+        let archive: [String: Any] = [
+            "messages": [[
+                "id": messageID.uuidString, "role": "user", "text": "Pending input",
+                "date": 0, "isInterrupted": false
+            ]],
+            "draft": "", "pendingPrompt": "Pending input",
+            "pendingMessageID": messageID.uuidString,
+            "lastModelID": modelID.uuidString, "performanceRecords": []
+        ]
+        try JSONSerialization.data(withJSONObject: archive).write(to: folder.appendingPathComponent("conversation.json"))
+
+        let session = ChatSession(directory: folder)
+        XCTAssertEqual(session.draft, "Pending input")
+        XCTAssertEqual(session.lastModelID, modelID)
+        XCTAssertEqual(session.messages.count, 1)
+        XCTAssertTrue(session.messages[0].isInterrupted)
+        XCTAssertNil(session.loadedModelID)
+        XCTAssertFalse(session.isBusy)
+        XCTAssertNil(session.tokensPerSecond)
+    }
+
+    func testUnreadableArchiveIsNotOverwrittenByDraftSave() throws {
+        let folder = try directory()
+        let file = folder.appendingPathComponent("conversation.json")
+        let damaged = Data("incomplete JSON".utf8)
+        try damaged.write(to: file)
+
+        let session = ChatSession(directory: folder)
+        XCTAssertNotNil(session.errorMessage)
+        session.draft = "New input"
+        session.saveDraft()
+        XCTAssertEqual(try Data(contentsOf: file), damaged)
+        XCTAssertNotNil(session.errorMessage)
+    }
+
+    func testExistingUnsentDraftWinsOverInterruptedPrompt() throws {
+        let folder = try directory()
+        let archive: [String: Any] = [
+            "messages": [], "draft": "A newer unsent draft",
+            "pendingPrompt": "Older in-flight prompt", "performanceRecords": []
+        ]
+        try JSONSerialization.data(withJSONObject: archive).write(to: folder.appendingPathComponent("conversation.json"))
+        let session = ChatSession(directory: folder)
+        XCTAssertEqual(session.draft, "A newer unsent draft")
+        XCTAssertFalse(session.isBusy)
+    }
+}
