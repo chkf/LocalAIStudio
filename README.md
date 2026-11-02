@@ -2,7 +2,7 @@
 
 A lightweight, native iOS app for **on-device AI**, image generation, model management, device monitoring, widgets, and Shortcuts.
 
-**Status:** Minimal SwiftUI four-tab starter and a basic on-device status snapshot are checked in. macOS compilation and real-device testing have not yet been verified. AI inference, background generation, and widgets are not implemented.
+**Status:** Minimal SwiftUI four-tab starter and a basic on-device status snapshot are checked in. The starter compiled in GitHub Actions on 2026-11-02; iPhone installation and on-device testing have not yet been verified. AI inference, background generation, and widgets are not implemented.
 
 ![UI concept](docs/ui-mockup.svg)
 
@@ -20,7 +20,7 @@ See [the project plan](docs/PLAN.md) and [development guidelines](AGENTS.md).
 
 ## Build and signing approach
 
-The repository includes an XcodeGen spec (`project.yml`) and a GitHub Actions workflow (`.github/workflows/ios.yml`) for an unsigned IPA. Open the **Actions** tab to inspect build results; a successful first build has not been confirmed yet.
+The repository includes an XcodeGen spec (`project.yml`) and a GitHub Actions workflow (`.github/workflows/ios.yml`) for an unsigned IPA. Open the **Actions** tab to inspect build results; the first unsigned IPA build succeeded on 2026-11-02.
 
 
 Development from Windows 11 + WSL2, with an Xcode/macOS build environment (e.g. GitHub Actions). Build an **unsigned IPA**, then sign **locally** with your own P12 private key and matching provisioning profile. Signing material is not needed in the repository or CI.
