@@ -3,10 +3,12 @@
   "features": [
     "refractivity"
   ],
-  "fill": {
-    "automatic-gradient": "srgb:0.98431,0.99216,0.99608,1.00000"
-  },
   "fill-specializations": [
+    {
+      "value": {
+        "automatic-gradient": "srgb:0.98431,0.99216,0.99608,1.00000"
+      }
+    },
     {
       "appearance": "dark",
       "value": "system-dark"
@@ -110,4 +112,3 @@
     "squares": "shared"
   }
 }
-
