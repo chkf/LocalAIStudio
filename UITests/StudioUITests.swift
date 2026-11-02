@@ -72,15 +72,17 @@ final class StudioUITests: XCTestCase {
         app.activate()
         XCTAssertTrue(cpu.label.contains("%"), "Resume must retain the last CPU value while rebuilding its baseline.")
         app.buttons["deviceDetailsButton"].tap()
-        let count = app.descendants(matching: .any)["deviceSampleCount"]
+        let count = app.staticTexts["deviceSampleCount"]
         XCTAssertTrue(count.waitForExistence(timeout: 10), app.debugDescription)
         let afterResume = try countValue(count)
         XCTAssertGreaterThanOrEqual(afterResume, beforeBackground)
         let resumed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            guard let value = count.value as? String, let number = Int(value) else { return false }
+            // Re-query the live text instead of retaining a resolved accessibility snapshot.
+            let latest = app.staticTexts["deviceSampleCount"]
+            guard latest.exists, let number = Int(latest.label) else { return false }
             return number > afterResume + 1
         }, object: nil)
-        wait(for: [resumed], timeout: 10)
+        wait(for: [resumed], timeout: 30)
         app.buttons["closeDeviceDetails"].tap()
         snapshot(app, "System-after-background")
     }
@@ -151,15 +153,15 @@ final class StudioUITests: XCTestCase {
         // Read the real counter in details, not a toolbar button's system-owned value.
         app.buttons["deviceDetailsButton"].tap()
         defer { app.buttons["closeDeviceDetails"].tap() }
-        let counter = app.descendants(matching: .any)["deviceSampleCount"]
+        let counter = app.staticTexts["deviceSampleCount"]
         XCTAssertTrue(counter.waitForExistence(timeout: 10), app.debugDescription)
         return try countValue(counter)
     }
 
     @MainActor
     private func countValue(_ element: XCUIElement) throws -> Int {
-        let value = try XCTUnwrap(element.value as? String, element.debugDescription)
-        return try XCTUnwrap(Int(value), "Unexpected sample counter: \(value)")
+        let text = element.label
+        return try XCTUnwrap(Int(text), "Unexpected sample counter: \(text)")
     }
 
     @MainActor

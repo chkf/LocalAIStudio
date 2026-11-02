@@ -280,11 +280,10 @@ struct DevicePage: View {
                 Section("采样") {
                     LabeledContent("状态", value: monitor.isSampling ? "前台监测中" : "已暂停")
                     LabeledContent("更新时间", value: snapshot.date.formatted(date: .omitted, time: .standard))
-                    LabeledContent("最近样本", value: "\(monitor.history.count)")
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("最近样本")
-                        .accessibilityValue("\(monitor.history.count)")
-                        .accessibilityIdentifier("deviceSampleCount")
+                    LabeledContent("最近样本") {
+                        Text("\(monitor.history.count)").monospacedDigit()
+                            .accessibilityIdentifier("deviceSampleCount")
+                    }
                     Text("前台每 2 秒采样，切换页面继续监测；进入后台后保留快照，回来立即刷新。App CPU 以单核心 100% 计，多线程可能超过 100%。")
                 }
                 Section("GPU") {
