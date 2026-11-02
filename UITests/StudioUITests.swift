@@ -79,7 +79,7 @@ final class StudioUITests: XCTestCase {
         let resumed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             // Re-query the live text instead of retaining a resolved accessibility snapshot.
             let latest = app.staticTexts["deviceSampleCount"]
-            guard latest.exists, let number = Int(latest.label) else { return false }
+            guard latest.exists, let number = self.sampleNumber(latest.label) else { return false }
             return number > afterResume + 1
         }, object: nil)
         wait(for: [resumed], timeout: 30)
@@ -161,7 +161,12 @@ final class StudioUITests: XCTestCase {
     @MainActor
     private func countValue(_ element: XCUIElement) throws -> Int {
         let text = element.label
-        return try XCTUnwrap(Int(text), "Unexpected sample counter: \(text)")
+        return try XCTUnwrap(sampleNumber(text), "Unexpected sample counter: \(text)")
+    }
+
+    private func sampleNumber(_ label: String) -> Int? {
+        // LabeledContent exposes its title and value together: "最近样本, 5".
+        label.split(separator: ",").last.flatMap { Int($0.trimmingCharacters(in: .whitespaces)) }
     }
 
     @MainActor
