@@ -1,20 +1,28 @@
 # Local AI Studio app icon
 
-`Resources/AppIcon.icon` is the editable Apple Icon Composer source. Its four
-1024 × 1024 SVG layers are ordered front to back:
+`Resources/AppIcon.icon` is the editable Apple Icon Composer source. It has two
+overlapping translucent lenses and separate lettering. Its three 1024 × 1024
+SVG layers are ordered front to back:
 
-1. `04-AI.svg`: outlined dark blue-gray lettering; glass effects disabled.
-2. `03-FrostedGlass.svg`: the pale central lens.
-3. `02-GreenGlass.svg`: the green rear lens.
-4. `01-BlueGlass.svg`: the blue rear lens.
+1. `04-AI.svg`: outlined dark blue-gray lettering, light ink in Dark appearance;
+   glass effects disabled.
+2. `02-GreenGlass.svg`: the green lens, with group opacity 0.54.
+3. `01-BlueGlass.svg`: the blue lens, with group opacity 0.66.
 
-The glass layers contain their own shapes, colors, gradient rims, and soft
-reflection bands, with no embedded PNG, background rectangle, or duplicated
-AI lettering. These vector details preserve the selected artwork's gloss;
-Icon Composer additionally applies specular highlights, refraction,
-translucency, and shadows to the three glass groups independently. The
-selected raster reference remains at
-`docs/app-icon-reference.png`; it is not packaged as an icon layer.
+The central color comes from the blue and green layers compositing through
+each other. There is no third lens, separately painted overlap, or frosted
+panel. The two shapes extend inward so their intersection frames the AI.
+
+The SVGs contain opaque base colors with soft local reflection and edge details;
+Icon Composer's group opacity creates the uniform transparency. Directional
+material translucency is disabled to keep it separate from opacity. Mild native
+refraction remains enabled, while specular rims and cast shadows are disabled
+to avoid hard outlines. The artwork contains no embedded PNG, background
+rectangle, or duplicated AI lettering.
+
+`docs/app-icon-reference.png` remains as the earlier color and composition
+reference. The current design follows the clarified two-lens overlap direction;
+the raster is not packaged as an icon layer.
 
 ## Compile and inspect
 
@@ -47,8 +55,8 @@ the supported glass properties and fallbacks.
 
 Ordinary SVG previews show the vector geometry, colors, and fixed reflection
 details. They do not include Apple's glass material. `ictool` exports include
-Apple's material rendering,
-but Clear previews do not reproduce the live Home Screen wallpaper interaction.
+Apple's material rendering, but Clear previews do not reproduce the live Home
+Screen wallpaper interaction.
 The vector version must be judged from those rendered exports and an iPhone,
 not described as pixel-identical to the original image.
 

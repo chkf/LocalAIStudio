@@ -20,7 +20,18 @@
         {
           "image-name": "04-AI.svg",
           "name": "AI",
-          "glass": false
+          "glass": false,
+          "fill-specializations": [
+            {
+              "value": "automatic"
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.91765,0.98431,1.00000,1.00000"
+              }
+            }
+          ]
         }
       ],
       "lighting": "individual",
@@ -28,32 +39,6 @@
       "shadow": {
         "kind": "none",
         "opacity": 0
-      }
-    },
-    {
-      "name": "Frosted glass",
-      "layers": [
-        {
-          "image-name": "03-FrostedGlass.svg",
-          "name": "Frosted glass",
-          "glass": true
-        }
-      ],
-      "lighting": "individual",
-      "blur-material": 0.12,
-      "refractivity": {
-        "depth": 0.18,
-        "enabled": true,
-        "strength": 0.22
-      },
-      "specular": true,
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.08
-      },
-      "translucency": {
-        "enabled": true,
-        "value": 0.1
       }
     },
     {
@@ -67,19 +52,20 @@
       ],
       "lighting": "individual",
       "refractivity": {
-        "depth": 0.16,
+        "depth": 0.08,
         "enabled": true,
-        "strength": 0.18
+        "strength": 0.1
       },
-      "specular": true,
+      "specular": false,
       "shadow": {
-        "kind": "layer-color",
-        "opacity": 0.08
+        "kind": "none",
+        "opacity": 0
       },
       "translucency": {
-        "enabled": true,
-        "value": 0.04
-      }
+        "enabled": false,
+        "value": 0
+      },
+      "opacity": 0.54
     },
     {
       "name": "Blue glass",
@@ -92,19 +78,20 @@
       ],
       "lighting": "individual",
       "refractivity": {
-        "depth": 0.16,
+        "depth": 0.08,
         "enabled": true,
-        "strength": 0.18
+        "strength": 0.1
       },
-      "specular": true,
+      "specular": false,
       "shadow": {
-        "kind": "layer-color",
-        "opacity": 0.08
+        "kind": "none",
+        "opacity": 0
       },
       "translucency": {
-        "enabled": true,
-        "value": 0.04
-      }
+        "enabled": false,
+        "value": 0
+      },
+      "opacity": 0.66
     }
   ],
   "supported-platforms": {
