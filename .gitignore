@@ -1,0 +1,25 @@
+# Xcode / generated files
+.DS_Store
+DerivedData/
+.build/
+build/
+*.xcuserstate
+xcuserdata/
+*.ipa
+Payload/
+
+# Signing credentials — never commit
+*.p12
+*.p8
+*.pfx
+*.mobileprovision
+*.key
+.env
+.env.*
+
+# Downloaded AI model weights
+*.safetensors
+*.gguf
+*.ckpt
+*.litertlm
+*.mlmodelc/
