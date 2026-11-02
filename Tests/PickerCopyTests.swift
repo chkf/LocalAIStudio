@@ -21,14 +21,14 @@ final class PickerCopyTests: XCTestCase {
         let size: UInt64 = 4_000_000_000
         try handle.truncate(atOffset: size) // Sparse fixture; not 4 GB of weights.
         try handle.close()
-        let inode = try FileManager.default.attributesOfItem(atPath: copy.path)[.systemFileNumber] as? NSNumber
+        let inode = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: copy.path)[.systemFileNumber] as? NSNumber)
         let files = try ModelFiles(directory: root.appendingPathComponent("Models"))
         let model = try await files.importPickerCopy(from: copy)
         let destination = files.fileURL(for: model)
         XCTAssertEqual(model.byteCount, Int64(size))
         XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
         XCTAssertEqual(try Data(contentsOf: original), data)
-        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: destination.path)[.systemFileNumber] as? NSNumber, inode)
+        XCTAssertEqual(try XCTUnwrap(FileManager.default.attributesOfItem(atPath: destination.path)[.systemFileNumber] as? NSNumber), inode)
         try await files.discardPickerCopies([copy])
         let models = try await files.list()
         XCTAssertEqual(models, [model])

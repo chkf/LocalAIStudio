@@ -54,7 +54,9 @@ jobs:
               info = plistlib.loads(ipa.read(app + 'Info.plist'))
               for key in ('CFBundleVersion', 'CFBundleShortVersionString'):
                   assert info.get(key), f'Missing {key} from app bundle'
-              assert info.get('LSSupportsOpeningDocumentsInPlace') is True, 'Release must support the picker open mode'
+              for key in ('CFBundleDisplayName', 'CFBundleName'):
+                  assert info.get(key) == 'AI Studio', f'Incorrect {key}: {info.get(key)}'
+              assert info.get('LSSupportsOpeningDocumentsInPlace') is True
               assert not info.get('UIFileSharingEnabled', False), 'Release must not expose test fixtures'
               assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
               assert ipa.getinfo(app + 'Frameworks/CLiteRTLM.framework/CLiteRTLM').file_size > 0
@@ -62,7 +64,7 @@ jobs:
               assert primary_icon.get('CFBundleIconName') == 'AppIcon', 'Missing AppIcon registration'
               assert ipa.getinfo(app + 'Assets.car').file_size > 0
               assert ipa.testzip() is None, 'Corrupt IPA entry'
-          print('Unsigned IPA structure, document access, version metadata and icon registration verified.')
+          print('Unsigned IPA structure, app names, version metadata and icon registration verified.')
           PY
 
       - uses: actions/upload-artifact@v4
@@ -135,8 +137,18 @@ jobs:
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
             build-for-testing 2>&1 | tee test-build.log
+          # A separate app exposes the source documents; never bundled into the IPA.
+          xcodebuild \
+            -project LocalAIStudio.xcodeproj \
+            -scheme ImportFixtureHost \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee fixture-build.log
 
-      - name: Prepare real Files picker fixtures
+      - name: Prepare external Files picker fixtures
         if: ${{ github.event_name == 'pull_request' }}
         id: fixtures
         env:
@@ -145,27 +157,28 @@ jobs:
           python3 - <<'PY'
           import pathlib, plistlib
           products = pathlib.Path('DerivedData/Build/Products')
-          debug = plistlib.loads((products / 'Debug-iphonesimulator/LocalAIStudio.app/Info.plist').read_bytes())
-          release = plistlib.loads((products / 'Release-iphoneos/LocalAIStudio.app/Info.plist').read_bytes())
-          key = 'LSSupportsOpeningDocumentsInPlace'
-          assert debug.get(key) is True and release.get(key) is True, (debug.get(key), release.get(key))
-          assert debug.get('UIFileSharingEnabled') is True
-          assert not release.get('UIFileSharingEnabled', False)
-          print('Debug and Release share open-in-place support; only Debug exposes fixture documents.')
+          for configuration in ('Debug-iphonesimulator', 'Release-iphoneos'):
+              info = plistlib.loads((products / configuration / 'LocalAIStudio.app/Info.plist').read_bytes())
+              assert info.get('LSSupportsOpeningDocumentsInPlace') is True
+              assert not info.get('UIFileSharingEnabled', False)
+              assert info.get('CFBundleDisplayName') == info.get('CFBundleName') == 'AI Studio'
+          print('Debug and Release use the same document configuration and app names.')
           PY
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
           xcrun simctl install "$SIMULATOR_ID" DerivedData/Build/Products/Debug-iphonesimulator/LocalAIStudio.app
-          APP_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio data)
-          export APP_CONTAINER
+          xcrun simctl install "$SIMULATOR_ID" DerivedData/Build/Products/Debug-iphonesimulator/ImportFixtureHost.app
+          FIXTURE_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio.importfixtures data)
+          export FIXTURE_CONTAINER
           python3 - <<'PY'
           import os, pathlib, struct
-          documents = pathlib.Path(os.environ['APP_CONTAINER']) / 'Documents'
+          documents = pathlib.Path(os.environ['FIXTURE_CONTAINER']) / 'Documents'
           documents.mkdir(exist_ok=True)
-          # A 36-byte header exercises file selection and import, not model inference.
+          # Header plus padding exercises a real cross-sandbox copy, not model inference.
           header = b'LITERTLM' + struct.pack('<IIIIQ', 1, 9, 0, 0, 36) + bytes(4)
-          (documents / 'UI-Import-Test.litertlm').write_bytes(header)
+          (documents / 'UI-Import-Test.litertlm').write_bytes(header + bytes(1024 * 1024 - len(header)))
           (documents / 'UI-Unsupported-File.txt').write_text('An ordinary file, not model weights.\n')
           PY
+          xcrun simctl launch "$SIMULATOR_ID" dev.example.localaistudio.importfixtures
 
       - name: Run unit and UI tests
         if: ${{ github.event_name == 'pull_request' }}
@@ -189,15 +202,15 @@ jobs:
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
         run: |
-          APP_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio data)
-          export APP_CONTAINER
+          FIXTURE_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio.importfixtures data)
+          export FIXTURE_CONTAINER
           python3 - <<'PY'
           import os, pathlib, struct
-          documents = pathlib.Path(os.environ['APP_CONTAINER']) / 'Documents'
+          documents = pathlib.Path(os.environ['FIXTURE_CONTAINER']) / 'Documents'
           header = b'LITERTLM' + struct.pack('<IIIIQ', 1, 9, 0, 0, 36) + bytes(4)
-          assert (documents / 'UI-Import-Test.litertlm').read_bytes() == header
+          assert (documents / 'UI-Import-Test.litertlm').read_bytes() == header + bytes(1024 * 1024 - len(header))
           assert (documents / 'UI-Unsupported-File.txt').read_text() == 'An ordinary file, not model weights.\n'
-          print('Selected source files are unchanged after UI tests.')
+          print('External source files are unchanged after UI tests.')
           PY
 
       - name: Export test screenshots
@@ -225,6 +238,7 @@ jobs:
           path: |
             build.log
             test-build.log
+            fixture-build.log
             test.log
             TestResults.xcresult
           if-no-files-found: warn

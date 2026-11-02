@@ -107,7 +107,7 @@ final class ModelImportUITests: XCTestCase {
             let local = text(picker, ["On My iPhone", "我的 iPhone", "在我的 iPhone 上"])
             if local.waitForExistence(timeout: 5) {
                 local.tap()
-                let folder = text(picker, ["AI Studio"])
+                let folder = text(picker, ["Import Fixtures"])
                 XCTAssertTrue(folder.waitForExistence(timeout: 10), app.debugDescription)
                 folder.tap()
             }

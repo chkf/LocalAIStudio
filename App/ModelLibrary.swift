@@ -35,7 +35,8 @@ final class ModelLibrary {
     }
 
     func importFiles(_ urls: [URL], copies: Bool = false) async {
-        guard let files, !isWriting else { return }
+        // A download can finish while Files is open. ModelFiles serializes both saves.
+        guard let files, !isImporting else { return }
         isImporting = true
         defer {
             isImporting = false
