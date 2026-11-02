@@ -97,7 +97,10 @@ final class ModelImportUITests: XCTestCase {
             return
         }
         snapshot(app, "Import-file-selection")
-        file.tap()
+        let document = app.cells.containing(.staticText, identifier: file.label).firstMatch
+        XCTAssertTrue(document.exists, app.debugDescription)
+        // Activate the document thumbnail instead of the separate file-name caption.
+        document.images.firstMatch.tap()
         let open = app.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "打开"])).firstMatch
         if open.waitForExistence(timeout: 2), open.isHittable { open.tap() }
     }

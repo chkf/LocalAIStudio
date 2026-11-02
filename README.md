@@ -33,7 +33,7 @@ See [the product plan](docs/PLAN.md), [inference research and exact compatibilit
 
 ## Build and test
 
-Develop from Windows/WSL2 and use the macOS GitHub Actions runner for Xcode builds. Every pull request runs:
+Develop from Windows/WSL2 and use the macOS GitHub Actions runner for Xcode builds. The workflow is manual: open **Actions → Build and test iOS app → Run workflow**, choose the branch, and enable **Run iOS simulator tests** for full validation. The default builds only the unsigned IPA. With tests enabled it runs:
 
 1. XcodeGen project generation.
 2. Unsigned iPhone Release compilation.
