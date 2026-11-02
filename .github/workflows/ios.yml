@@ -1,6 +1,12 @@
 name: Build unsigned iOS IPA
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "Resources/AppIcon.icon/**"
+      - ".github/workflows/ios.yml"
+      - "project.yml"
   workflow_dispatch:
     inputs:
       icon_only:
@@ -16,13 +22,14 @@ on:
 
 jobs:
   icon:
-    if: ${{ inputs.icon_only }}
-    runs-on: macos-26
+    if: ${{ github.event_name == 'pull_request' || inputs.icon_only }}
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
 
       - name: Compile Icon Composer artwork
         run: |
+          xcodebuild -version
           mkdir -p build/icon
           xcrun actool Resources/AppIcon.icon \
             --compile build/icon \
@@ -36,17 +43,39 @@ jobs:
             --notices --warnings --errors
           test -s build/icon/Assets.car
 
+      - name: Render Apple material previews
+        run: |
+          icon_developer_dir="$(xcode-select -p)"
+          icon_tool="${icon_developer_dir%/Developer}/Applications/Icon Composer.app/Contents/Executables/ictool"
+          "$icon_tool" --version
+          for appearance in Default Dark TintedLight TintedDark ClearLight ClearDark; do
+            "$icon_tool" Resources/AppIcon.icon \
+              --export-image \
+              --output-file "build/icon/preview-${appearance}.png" \
+              --platform iOS \
+              --rendition "$appearance" \
+              --width 1024 --height 1024 --scale 1
+          done
+          for angle in 45 225; do
+            "$icon_tool" Resources/AppIcon.icon \
+              --export-image \
+              --output-file "build/icon/preview-light-${angle}.png" \
+              --platform iOS --rendition Default \
+              --width 1024 --height 1024 --scale 1 \
+              --light-angle "$angle"
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: LocalAIStudio-IconComposer
           path: |
-            build/icon/Assets.car
-            build/icon/icon-partial-info.plist
+            build/icon/
             Resources/AppIcon.icon
+          if-no-files-found: error
 
   build:
-    if: ${{ !inputs.icon_only }}
-    runs-on: macos-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && !inputs.icon_only }}
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
 
@@ -78,3 +107,4 @@ jobs:
         with:
           name: LocalAIStudio-unsigned
           path: LocalAIStudio-unsigned.ipa
+

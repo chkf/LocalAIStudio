@@ -1,20 +1,108 @@
 {
+  "color-space-for-untagged-svg-colors": "srgb",
+  "features": [
+    "refractivity"
+  ],
   "fill": {
-    "automatic-gradient": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+    "automatic-gradient": "srgb:0.98431,0.99216,0.99608,1.00000"
   },
+  "fill-specializations": [
+    {
+      "appearance": "dark",
+      "value": "system-dark"
+    }
+  ],
   "groups": [
     {
+      "name": "AI",
       "layers": [
         {
-          "image-name": "01-GlossyArtwork.png",
-          "name": "Glossy artwork",
+          "image-name": "04-AI.svg",
+          "name": "AI",
           "glass": false
         }
       ],
       "lighting": "individual",
+      "specular": false,
       "shadow": {
         "kind": "none",
         "opacity": 0
+      }
+    },
+    {
+      "name": "Frosted glass",
+      "layers": [
+        {
+          "image-name": "03-FrostedGlass.svg",
+          "name": "Frosted glass",
+          "glass": true
+        }
+      ],
+      "lighting": "individual",
+      "blur-material": 0.12,
+      "refractivity": {
+        "depth": 0.18,
+        "enabled": true,
+        "strength": 0.22
+      },
+      "specular": true,
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.18
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.22
+      }
+    },
+    {
+      "name": "Green glass",
+      "layers": [
+        {
+          "image-name": "02-GreenGlass.svg",
+          "name": "Green glass",
+          "glass": true
+        }
+      ],
+      "lighting": "individual",
+      "refractivity": {
+        "depth": 0.16,
+        "enabled": true,
+        "strength": 0.18
+      },
+      "specular": true,
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.18
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.12
+      }
+    },
+    {
+      "name": "Blue glass",
+      "layers": [
+        {
+          "image-name": "01-BlueGlass.svg",
+          "name": "Blue glass",
+          "glass": true
+        }
+      ],
+      "lighting": "individual",
+      "refractivity": {
+        "depth": 0.16,
+        "enabled": true,
+        "strength": 0.18
+      },
+      "specular": true,
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.18
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.12
       }
     }
   ],
@@ -22,3 +110,4 @@
     "squares": "shared"
   }
 }
+

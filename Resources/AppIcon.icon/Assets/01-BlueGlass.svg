@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="clip"><path d="M114 633C51 573 27 496 27 412C20 307 68 210 159 148C241 93 321 78 402 95C510 112 603 171 660 246C734 337 785 450 748 547C703 668 588 736 460 747C321 758 205 723 114 633Z"/></clipPath>
+    <linearGradient id="color" x1="80" y1="570" x2="575" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0061FD"/>
+      <stop offset=".28" stop-color="#0081FC"/>
+      <stop offset=".56" stop-color="#09A8F5"/>
+      <stop offset=".79" stop-color="#5DD5F8"/>
+      <stop offset="1" stop-color="#A7EAF8"/>
+    </linearGradient>
+    <radialGradient id="cool" cx="105" cy="430" r="270" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#004DFD" stop-opacity=".62"/>
+      <stop offset=".5" stop-color="#005EFF" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#005EFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="pale" cx="610" cy="258" r="264" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ECFCFF" stop-opacity=".77"/>
+      <stop offset=".53" stop-color="#C4F4FF" stop-opacity=".30"/>
+      <stop offset="1" stop-color="#C4F4FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="upper" cx="210" cy="204" r="205" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#75CCFF" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#75CCFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M114 633C51 573 27 496 27 412C20 307 68 210 159 148C241 93 321 78 402 95C510 112 603 171 660 246C734 337 785 450 748 547C703 668 588 736 460 747C321 758 205 723 114 633Z" fill="url(#color)"/>
+  <g clip-path="url(#clip)">
+    <path d="M0 0H1024V1024H0Z" fill="url(#cool)"/>
+    <path d="M0 0H1024V1024H0Z" fill="url(#pale)"/>
+    <path d="M0 0H1024V1024H0Z" fill="url(#upper)"/>
+  </g>
+</svg>

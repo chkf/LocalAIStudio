@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="clip"><path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z"/></clipPath>
+    <linearGradient id="color" x1="465" y1="857" x2="862" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00BBD0"/>
+      <stop offset=".30" stop-color="#00D6AC"/>
+      <stop offset=".66" stop-color="#00D96A"/>
+      <stop offset="1" stop-color="#00D94D"/>
+    </linearGradient>
+    <radialGradient id="upper" cx="868" cy="325" r="245" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#BCFFD6" stop-opacity=".88"/>
+      <stop offset=".40" stop-color="#ABFFD1" stop-opacity=".67"/>
+      <stop offset=".77" stop-color="#77FFC2" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#77FFC2" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lower" cx="858" cy="776" r="308" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C7FFD6" stop-opacity=".80"/>
+      <stop offset=".36" stop-color="#A2FFCF" stop-opacity=".61"/>
+      <stop offset=".75" stop-color="#6CFFCD" stop-opacity=".23"/>
+      <stop offset="1" stop-color="#6CFFCD" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bottom" cx="662" cy="917" r="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#54FCD0" stop-opacity=".68"/>
+      <stop offset="1" stop-color="#54FCD0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M650 245C729 218 810 221 875 258C957 303 992 385 998 476C1008 635 938 803 836 886C760 950 659 974 574 947C462 912 385 835 345 748C301 651 339 485 411 372C477 340 566 285 650 245Z" fill="url(#color)"/>
+  <g clip-path="url(#clip)">
+    <path d="M0 0H1024V1024H0Z" fill="url(#upper)"/>
+    <path d="M0 0H1024V1024H0Z" fill="url(#lower)"/>
+    <path d="M0 0H1024V1024H0Z" fill="url(#bottom)"/>
+  </g>
+</svg>

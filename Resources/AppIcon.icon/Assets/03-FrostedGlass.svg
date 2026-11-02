@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="clip"><path d="M118 597C155 482 330 350 515 285C578 261 632 244 660 248C742 333 800 452 804 560C813 687 742 784 631 813C488 852 290 761 169 691C120 665 105 630 118 597Z"/></clipPath>
+    <radialGradient id="blue" cx="150" cy="571" r="365" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#49ACF9" stop-opacity=".98"/>
+      <stop offset=".38" stop-color="#8DCDFB" stop-opacity=".78"/>
+      <stop offset=".73" stop-color="#D3EBFD" stop-opacity=".50"/>
+      <stop offset="1" stop-color="#D3EBFD" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="peach" cx="638" cy="284" r="329" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFA589" stop-opacity="1"/>
+      <stop offset=".28" stop-color="#FFB799" stop-opacity=".94"/>
+      <stop offset=".60" stop-color="#FFDAC0" stop-opacity=".77"/>
+      <stop offset="1" stop-color="#FFF0D6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="aqua" cx="450" cy="813" r="274" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00D6D5" stop-opacity=".91"/>
+      <stop offset=".42" stop-color="#6CE4E2" stop-opacity=".82"/>
+      <stop offset=".77" stop-color="#B4F2EB" stop-opacity=".40"/>
+      <stop offset="1" stop-color="#B4F2EB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mint" cx="640" cy="793" r="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4FF29F" stop-opacity=".88"/>
+      <stop offset=".38" stop-color="#8AF5B6" stop-opacity=".76"/>
+      <stop offset=".73" stop-color="#C7FCDF" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#C7FCDF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="warm" cx="778" cy="528" r="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4F9D6" stop-opacity=".59"/>
+      <stop offset="1" stop-color="#F4F9D6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M118 597C155 482 330 350 515 285C578 261 632 244 660 248C742 333 800 452 804 560C813 687 742 784 631 813C488 852 290 761 169 691C120 665 105 630 118 597Z" fill="#FAFCFC"/>
+  <g clip-path="url(#clip)">
+    <path d="M0 0H1024V1024H0Z" fill="url(#blue)"/>
+    <path d="M0 0H1024V1024H0Z" fill="url(#peach)"/>
+    <path d="M0 0H1024V1024H0Z" fill="url(#aqua)"/>
+    <path d="M0 0H1024V1024H0Z" fill="url(#mint)"/>
+    <path d="M0 0H1024V1024H0Z" fill="url(#warm)"/>
+  </g>
+</svg>
