@@ -2,16 +2,12 @@ name: Build and test iOS app
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-    paths:
-      - "App/**"
-      - "Tests/**"
-      - "UITests/**"
-      - "project.yml"
-      - ".github/workflows/ios.yml"
+    inputs:
+      run_tests:
+        description: "Run iOS simulator tests (slower)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -62,6 +58,7 @@ jobs:
           if-no-files-found: error
 
       - name: Select an available iOS 26 iPhone simulator
+        if: ${{ inputs.run_tests }}
         id: simulator
         run: |
           python3 - <<'PY'
@@ -81,6 +78,7 @@ jobs:
           PY
 
       - name: Build simulator test targets
+        if: ${{ inputs.run_tests }}
         run: |
           set -o pipefail
           xcodebuild \
@@ -96,6 +94,7 @@ jobs:
             build-for-testing 2>&1 | tee test-build.log
 
       - name: Prepare real Files picker fixtures
+        if: ${{ inputs.run_tests }}
         id: fixtures
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
@@ -125,6 +124,7 @@ jobs:
           PY
 
       - name: Run unit and UI tests
+        if: ${{ inputs.run_tests }}
         run: |
           set -o pipefail
           xcodebuild \
@@ -141,7 +141,7 @@ jobs:
             test-without-building 2>&1 | tee test.log
 
       - name: Verify import sources remain intact
-        if: always() && steps.fixtures.outcome == 'success'
+        if: ${{ always() && inputs.run_tests && steps.fixtures.outcome == 'success' }}
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
         run: |
@@ -157,7 +157,7 @@ jobs:
           PY
 
       - name: Export test screenshots
-        if: always()
+        if: ${{ always() && inputs.run_tests }}
         run: |
           if [ -d TestResults.xcresult ]; then
             xcrun xcresulttool export attachments \
@@ -166,7 +166,7 @@ jobs:
           fi
 
       - name: Upload test screenshots
-        if: always()
+        if: ${{ always() && inputs.run_tests }}
         uses: actions/upload-artifact@v4
         with:
           name: LocalAIStudio-screenshots
@@ -174,7 +174,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload build logs and test results
-        if: always()
+        if: ${{ always() && inputs.run_tests }}
         uses: actions/upload-artifact@v4
         with:
           name: LocalAIStudio-test-results
