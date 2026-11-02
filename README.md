@@ -8,14 +8,15 @@ A lightweight native iOS app for on-device AI, model files and device monitoring
 
 ## What works in this version
 
-- **Native navigation:** AI, Generate, Device and Models tabs; system/light/dark appearance; native accessibility behavior and an opaque composer when Reduce Transparency is enabled.
-- **Model library:** Files import, HTTPS file downloads, search, file size and metadata, and deletion. Duplicate names are stored independently.
+- **Native navigation:** AI, Generate, Device and Models tabs; settings live in the Models tab. System/light/dark appearance, native accessibility behavior and an opaque composer when Reduce Transparency is enabled.
+- **Model library:** single-file Files import, a visible import status with filename and cancellation, HTTPS file downloads, search, file size and metadata, and deletion. Duplicate names are stored independently.
 - **File handling:** security-scoped access, coordinated and cancellable chunked imports, atomic model-directory commits, backup exclusion for weights, disk-space checks and preservation of original Files imports.
 - **Downloads:** real progress, pause/cancel, saved requests and conditional resume data. Public Hugging Face resolve URLs work as direct links; repository pages, authentication and CivitAI parsing are not implemented. Entering the background pauses downloads. Resume depends on the server and system retaining the partial file.
 - **Format recognition:** bounded inspection of LiteRT-LM, GGUF, TFLite and Safetensors headers. Architecture/quantization/adapter labels come from metadata or actual tensor keys. Files with .task, .ckpt and .bin extensions can be stored as explicitly unverified files; no pickle content is executed.
 - **Text inference:** the official LiteRT-LM Swift package loads eligible .litertlm files, streams text, cancels native inference, unloads resources and restores conversation input/history after interruption. Model metadata is checked again by the engine before loading.
 - **Performance:** real model load timing and engine-reported TTFT, output tokens and tokens/s, when available. No token counts are inferred from streamed chunks.
-- **Device monitor:** total RAM, this app's memory footprint and CPU use, current process memory headroom, storage, battery/charging, thermal state and network path. Sampling runs only while Device is visible and the app is active.
+- **Device dashboard:** prominent app memory and CPU readings with native Charts for the last five minutes; process memory headroom and total physical RAM are labeled separately. Thermal state and battery/charging are visible together; Metal reports the hardware name, with device/storage/network details below. No invented GPU utilization, dedicated VRAM or Celsius temperature.
+- **Continuous foreground monitoring:** one shared monitor samples every two seconds across all tabs. Inactive/background scenes stop sampling, preserving the latest snapshot and recent history. Resume resets the CPU time baseline and starts a separate chart segment; the last valid CPU reading keeps its own timestamp until a new reading arrives.
 
 ## Current limits
 
@@ -37,7 +38,7 @@ Develop from Windows/WSL2 and use the macOS GitHub Actions runner for Xcode buil
 1. XcodeGen project generation.
 2. Unsigned iPhone Release compilation.
 3. Packaging of LocalAIStudio-unsigned.ipa.
-4. Unit tests and UI tests on an available iOS 26 iPhone simulator.
+4. Unit tests and UI tests on an available iOS 26 iPhone simulator, including tab/background monitoring, settings persistence and actual Files selection/import/error/cancel interaction.
 5. Upload of the IPA, test results/logs and UI screenshots.
 
 The LiteRT-LM dependency is pinned to the official v0.18.1 commit rather than a floating branch; see [the dependency explanation](docs/INFERENCE.md). Model weights are not included.
@@ -52,10 +53,19 @@ xcodebuild -project LocalAIStudio.xcodeproj -scheme LocalAIStudio \
   CODE_SIGNING_ALLOWED=NO build
 xcodebuild -project LocalAIStudio.xcodeproj -scheme LocalAIStudio \
   -destination 'platform=iOS Simulator,name=<available iPhone>' \
-  CODE_SIGNING_ALLOWED=NO test
+  -only-testing:LocalAIStudioTests CODE_SIGNING_ALLOWED=NO test
 ```
 
+The full UI suite needs the two tiny files prepared in the simulator's Documents directory by [the workflow](.github/workflows/ios.yml). It builds the test targets, boots and installs the Debug app, seeds the files, and runs `test-without-building`. Only Debug enables Documents sharing so the system Files picker can select these fixtures. Release behavior is unchanged. The 36-byte `.litertlm` fixture exercises header recognition and the import UI; it contains no weights and cannot be used for inference. CI also checks that both selected source files remain unchanged.
+
 The current build/test outcome is recorded in the PR and its linked Actions run. The initial minimal app was built successfully on 2026-11-02; that result alone does not validate subsequent features.
+
+### Device/import checks still required on an iPhone
+
+- Select a small supported model file, then the reported approximately 3.66 GB `.litertlm` file from Files. Confirm that selection closes the picker, shows import status, and either adds the file or explains the error. Test local Files and the actual provider used (for example iCloud); the original picker stall's cause has not been proven.
+- Cancel a large import, verify the source remains intact and no incomplete model appears, and try again. Import success is not proof that Gemma 4 can run.
+- Observe CPU/memory, switch to AI for 15 seconds, then return: readings and samples should persist. Background/lock and resume: retain history, show a gap, and restart CPU sampling without including background time in its denominator.
+- Check the dashboard in light/dark appearance, larger text, Reduce Motion and Reduce Transparency. Simulator values describe the host Mac; they do not validate iPhone memory limits, thermal behavior or battery readings.
 
 ## Signing and model licenses
 

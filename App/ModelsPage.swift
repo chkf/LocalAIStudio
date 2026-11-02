@@ -26,12 +26,6 @@ struct ModelsPage: View {
                         LabeledContent("本机模型", value: "\(library.models.count) 个")
                         LabeledContent("文件占用", value: bytes(library.totalBytes))
                     }
-                    if library.isImporting {
-                        Section {
-                            ProgressView("正在复制并检查文件…")
-                            Button("取消导入", role: .cancel) { library.cancelImport() }
-                        }
-                    }
                     if let download = library.download, let transfer = download.transfer {
                         Section("下载") { TransferRow(download: download, transfer: transfer) }
                     }
@@ -45,6 +39,7 @@ struct ModelsPage: View {
                                 Button("从文件导入") { importing = true }
                                     .buttonStyle(.borderedProminent)
                                     .disabled(library.isWriting)
+                                    .accessibilityIdentifier("importModel")
                             }
                         }
                         .listRowBackground(Color.clear)
@@ -73,6 +68,28 @@ struct ModelsPage: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                if library.isImporting {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("正在读取、复制并检查文件…")
+                                .font(.subheadline)
+                            if let name = library.importingName {
+                                Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("importStatus")
+                        Spacer(minLength: 8)
+                        Button("取消导入", role: .cancel) { library.cancelImport() }
+                            .font(.subheadline)
+                            .accessibilityIdentifier("cancelImport")
+                    }
+                    .padding()
+                    .background(.bar)
+                }
+            }
             .navigationTitle("模型")
             .searchable(text: $query, prompt: "搜索本机模型")
             .toolbar {
@@ -81,6 +98,7 @@ struct ModelsPage: View {
                     Menu("添加模型", systemImage: "plus") {
                         Button("从文件导入", systemImage: "folder") { importing = true }
                             .disabled(library.isWriting)
+                            .accessibilityIdentifier("importModel")
                         Button("从 HTTPS 下载", systemImage: "arrow.down.circle") { downloading = true }
                             .disabled(library.download?.transfer != nil)
                     }
@@ -88,9 +106,10 @@ struct ModelsPage: View {
                     .accessibilityIdentifier("addModel")
                 }
             }
-            .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            // Choose one file, not a directory. Inspect its content after the picker returns its scoped URL.
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.data]) { result in
                 switch result {
-                case .success(let urls): Task { await library.importFiles(urls) }
+                case .success(let url): Task { await library.importFiles([url]) }
                 case .failure(let error): library.errorMessage = error.localizedDescription
                 }
             }

@@ -91,7 +91,6 @@ struct ChatPage: View {
             }
             .navigationTitle("AI")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { SettingsButton() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("对话选项", systemImage: "ellipsis") {
                         Button("卸载模型", systemImage: "eject") { Task { await chat.unload() } }

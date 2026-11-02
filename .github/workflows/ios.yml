@@ -80,6 +80,39 @@ jobs:
               output.write(f"id={device['udid']}\n")
           PY
 
+      - name: Build simulator test targets
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project LocalAIStudio.xcodeproj \
+            -scheme LocalAIStudio \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            -destination-timeout 120 \
+            -derivedDataPath DerivedData \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build-for-testing 2>&1 | tee test-build.log
+
+      - name: Prepare real Files picker fixtures
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
+        run: |
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl install "$SIMULATOR_ID" DerivedData/Build/Products/Debug-iphonesimulator/LocalAIStudio.app
+          APP_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio data)
+          export APP_CONTAINER
+          python3 - <<'PY'
+          import os, pathlib, struct
+          documents = pathlib.Path(os.environ['APP_CONTAINER']) / 'Documents'
+          documents.mkdir(exist_ok=True)
+          # A 36-byte header exercises file selection and import, not model inference.
+          header = b'LITERTLM' + struct.pack('<IIIIQ', 1, 9, 0, 0, 36) + bytes(4)
+          (documents / 'UI-Import-Test.litertlm').write_bytes(header)
+          (documents / 'UI-Unsupported-File.txt').write_text('An ordinary file, not model weights.\n')
+          PY
+
       - name: Run unit and UI tests
         run: |
           set -o pipefail
@@ -94,7 +127,22 @@ jobs:
             -resultBundlePath TestResults.xcresult \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
-            test 2>&1 | tee test.log
+            test-without-building 2>&1 | tee test.log
+
+      - name: Verify import sources remain intact
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
+        run: |
+          APP_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio data)
+          export APP_CONTAINER
+          python3 - <<'PY'
+          import os, pathlib, struct
+          documents = pathlib.Path(os.environ['APP_CONTAINER']) / 'Documents'
+          header = b'LITERTLM' + struct.pack('<IIIIQ', 1, 9, 0, 0, 36) + bytes(4)
+          assert (documents / 'UI-Import-Test.litertlm').read_bytes() == header
+          assert (documents / 'UI-Unsupported-File.txt').read_text() == 'An ordinary file, not model weights.\n'
+          print('Selected source files are unchanged after UI tests.')
+          PY
 
       - name: Export test screenshots
         if: always()
@@ -120,6 +168,7 @@ jobs:
           name: LocalAIStudio-test-results
           path: |
             build.log
+            test-build.log
             test.log
             TestResults.xcresult
           if-no-files-found: warn

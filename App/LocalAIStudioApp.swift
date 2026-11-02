@@ -29,6 +29,7 @@ private struct MainView: View {
     @State private var selection: Page = .chat
     @State private var library = ModelLibrary()
     @State private var chat = ChatSession()
+    @State private var monitor = DeviceMonitor()
 
     var body: some View {
         TabView(selection: $selection) {
@@ -54,8 +55,11 @@ private struct MainView: View {
         .tint(.green)
         .environment(library)
         .environment(chat)
+        .environment(monitor)
         .task { await library.open() }
-        .onChange(of: scenePhase) { _, phase in
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { monitor.start() }
+            else { monitor.stop() }
             if phase == .background {
                 library.cancelImport()
                 chat.saveDraft()
@@ -66,6 +70,7 @@ private struct MainView: View {
                 }
             }
         }
+        .onDisappear { monitor.stop() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
             chat.cancel()
             Task { await chat.unload() }
@@ -170,7 +175,6 @@ private struct GeneratePage: View {
                     .buttonStyle(.borderedProminent)
             }
             .navigationTitle("生图")
-            .toolbar { SettingsButton() }
         }
     }
 }

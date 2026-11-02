@@ -5,6 +5,7 @@ import Observation
 final class ModelLibrary {
     private(set) var models: [LocalModel] = []
     private(set) var isImporting = false
+    private(set) var importingName: String?
     private(set) var isReady = false
     private(set) var download: ModelDownload?
     var errorMessage: String?
@@ -38,12 +39,14 @@ final class ModelLibrary {
         isImporting = true
         defer {
             isImporting = false
+            importingName = nil
             importTask = nil
         }
         let job = Task { [weak self] in
             for url in urls {
                 do {
                     try Task.checkCancellation()
+                    self?.importingName = url.lastPathComponent
                     let model = try await files.importFile(from: url)
                     self?.models.insert(model, at: 0)
                 } catch is CancellationError {

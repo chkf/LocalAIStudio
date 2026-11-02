@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Metal
 import Network
 import Observation
 import UIKit
@@ -11,6 +12,7 @@ struct DeviceSnapshot {
     let appMemory: UInt64?
     let availableMemory: UInt64?
     let cpuPercent: Double?
+    let cpuDate: Date?
     let batteryPercent: Int?
     let batteryState: String
     let lowPowerMode: Bool
@@ -19,6 +21,15 @@ struct DeviceSnapshot {
     let freeStorage: Int64?
     let importantStorage: Int64?
     let storageError: String?
+}
+
+struct DeviceSample: Identifiable {
+    let date: Date
+    let appMemory: UInt64?
+    let cpuPercent: Double?
+    let segment: Int
+
+    var id: Date { date }
 }
 
 struct NetworkSnapshot {
@@ -48,24 +59,30 @@ struct NetworkSnapshot {
 final class DeviceMonitor {
     private(set) var snapshot: DeviceSnapshot?
     private(set) var network: NetworkSnapshot?
+    private(set) var history: [DeviceSample] = []
+    private(set) var isSampling = false
     let hardwareIdentifier = DeviceMonitor.readHardwareIdentifier()
+    let metalDeviceName = MTLCreateSystemDefaultDevice()?.name
 
     @ObservationIgnored private var samplingTask: Task<Void, Never>?
     @ObservationIgnored private var pathMonitor: NWPathMonitor?
     @ObservationIgnored private var previousCPU: (seconds: Double, time: ContinuousClock.Instant)?
+    @ObservationIgnored private var sampleSegment = 0
 
     func start() {
         guard samplingTask == nil else { return }
+        isSampling = true
         UIDevice.current.isBatteryMonitoringEnabled = true
         previousCPU = nil
-        network = nil
+        sampleSegment += 1
         refresh()
 
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
             let value = NetworkSnapshot(path: path)
             Task { @MainActor [weak self] in
-                self?.network = value
+                guard let self, self.isSampling else { return }
+                self.network = value
             }
         }
         monitor.start(queue: DispatchQueue(label: "LocalAIStudio.network"))
@@ -85,6 +102,7 @@ final class DeviceMonitor {
     }
 
     func stop() {
+        isSampling = false
         samplingTask?.cancel()
         samplingTask = nil
         pathMonitor?.pathUpdateHandler = nil
@@ -95,22 +113,12 @@ final class DeviceMonitor {
     }
 
     func refresh() {
+        guard isSampling else { return }
+        let date = Date.now
         let process = ProcessInfo.processInfo
         let device = UIDevice.current
-        var cpuPercent: Double?
-        if let cpuSeconds = Self.readCPUSeconds() {
-            let now = ContinuousClock.now
-            if let previousCPU {
-                let elapsed = previousCPU.time.duration(to: now).components
-                let wallSeconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
-                if wallSeconds > 0 {
-                    cpuPercent = max(0, (cpuSeconds - previousCPU.seconds) / wallSeconds * 100)
-                }
-            }
-            previousCPU = (cpuSeconds, now)
-        } else {
-            previousCPU = nil
-        }
+        let cpuPercent = sampleCPU(seconds: Self.readCPUSeconds(), at: ContinuousClock.now)
+        let appMemory = Self.readAppMemory()
 
         var totalStorage: Int64?
         var freeStorage: Int64?
@@ -138,11 +146,12 @@ final class DeviceMonitor {
         #endif
 
         snapshot = DeviceSnapshot(
-            date: .now,
+            date: date,
             physicalMemory: process.physicalMemory,
-            appMemory: Self.readAppMemory(),
+            appMemory: appMemory,
             availableMemory: availableMemory,
-            cpuPercent: cpuPercent,
+            cpuPercent: cpuPercent ?? snapshot?.cpuPercent,
+            cpuDate: cpuPercent == nil ? snapshot?.cpuDate : date,
             batteryPercent: device.batteryLevel < 0 ? nil : Int((device.batteryLevel * 100).rounded()),
             batteryState: Self.batteryDescription(device.batteryState),
             lowPowerMode: process.isLowPowerModeEnabled,
@@ -152,6 +161,31 @@ final class DeviceMonitor {
             importantStorage: importantStorage,
             storageError: storageError
         )
+        appendSample(date: date, appMemory: appMemory, cpuPercent: cpuPercent)
+    }
+
+    func sampleCPU(seconds: Double?, at time: ContinuousClock.Instant) -> Double? {
+        guard let seconds else {
+            previousCPU = nil
+            return nil
+        }
+        defer { previousCPU = (seconds, time) }
+        guard let previousCPU else { return nil }
+        let elapsed = previousCPU.time.duration(to: time).components
+        let wallSeconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+        guard wallSeconds > 0 else { return nil }
+        return max(0, (seconds - previousCPU.seconds) / wallSeconds * 100)
+    }
+
+    func appendSample(date: Date, appMemory: UInt64?, cpuPercent: Double?) {
+        // Missing readings and foreground sessions must not be joined by a chart line.
+        if appMemory == nil || cpuPercent == nil { sampleSegment += 1 }
+        history.append(DeviceSample(
+            date: date, appMemory: appMemory, cpuPercent: cpuPercent, segment: sampleSegment
+        ))
+        history.removeAll { $0.date < date.addingTimeInterval(-300) }
+        // Also bound memory if repeated foreground transitions add extra samples.
+        if history.count > 151 { history.removeFirst(history.count - 151) }
     }
 
     private static func readAppMemory() -> UInt64? {
