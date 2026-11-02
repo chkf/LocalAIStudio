@@ -63,6 +63,35 @@ jobs:
             --width 1024 --height 1024 --scale 1 \
             --design-generation 26
 
+      - name: Compare glass material strengths
+        run: |
+          python3 - <<'PY'
+          import copy, json, pathlib, shutil, subprocess
+          source = pathlib.Path('Resources/AppIcon.icon')
+          original = json.loads((source / 'icon.json').read_text())
+          developer = pathlib.Path(subprocess.check_output(['xcode-select', '-p'], text=True).strip())
+          tool = developer.parent / 'Applications/Icon Composer.app/Contents/Executables/ictool'
+          for name, depth, strength, translucent in [
+              ('Deep', 0.55, 0.75, True),
+              ('Crisp', 0.15, 0.9, True),
+              ('Saturated', 0.45, 0.7, False)]:
+              manifest = copy.deepcopy(original)
+              manifest['features'] = ['refractivity', 'specular-location']
+              for group in manifest['groups'][1:]:
+                  group['refractivity'] = {'enabled': True, 'depth': depth, 'strength': strength}
+                  group['specular'] = 'inside'
+                  group['shadow']['opacity'] = 0.22
+                  group['translucency']['enabled'] = translucent
+              work = pathlib.Path('build/material-comparison') / name / 'AppIcon.icon'
+              shutil.copytree(source, work)
+              (work / 'icon.json').write_text(json.dumps(manifest))
+              subprocess.run([str(tool), str(work), '--export-image',
+                              '--output-file', f'build/icon/material-{name}.png',
+                              '--platform', 'iOS', '--rendition', 'Default',
+                              '--width', '1024', '--height', '1024', '--scale', '1',
+                              '--design-generation', '27'], check=True)
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: LocalAIStudio-IconComposer
