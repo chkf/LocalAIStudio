@@ -4,6 +4,11 @@ import XCTest
 @testable import LocalAIStudio
 
 final class ModelDocumentPickerTests: XCTestCase {
+    func testAppDeclaresOpeningDocumentsInPlace() {
+        // Read the built app, not a test-only plist or an independently created picker.
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "LSSupportsOpeningDocumentsInPlace") as? Bool, true)
+    }
+
     @MainActor
     func testSelectionForwardsURLWithoutReadingOrCopyingIt() {
         let url = URL(fileURLWithPath: "/unavailable-provider/模型.litertlm")

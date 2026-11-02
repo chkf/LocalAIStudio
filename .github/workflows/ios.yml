@@ -54,13 +54,15 @@ jobs:
               info = plistlib.loads(ipa.read(app + 'Info.plist'))
               for key in ('CFBundleVersion', 'CFBundleShortVersionString'):
                   assert info.get(key), f'Missing {key} from app bundle'
+              assert info.get('LSSupportsOpeningDocumentsInPlace') is True, 'Release must support the picker open mode'
+              assert not info.get('UIFileSharingEnabled', False), 'Release must not expose test fixtures'
               assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
               assert ipa.getinfo(app + 'Frameworks/CLiteRTLM.framework/CLiteRTLM').file_size > 0
               primary_icon = info.get('CFBundleIcons', {}).get('CFBundlePrimaryIcon', {})
               assert primary_icon.get('CFBundleIconName') == 'AppIcon', 'Missing AppIcon registration'
               assert ipa.getinfo(app + 'Assets.car').file_size > 0
               assert ipa.testzip() is None, 'Corrupt IPA entry'
-          print('Unsigned IPA structure, app version metadata and icon registration verified.')
+          print('Unsigned IPA structure, document access, version metadata and icon registration verified.')
           PY
 
       - uses: actions/upload-artifact@v4
@@ -145,10 +147,11 @@ jobs:
           products = pathlib.Path('DerivedData/Build/Products')
           debug = plistlib.loads((products / 'Debug-iphonesimulator/LocalAIStudio.app/Info.plist').read_bytes())
           release = plistlib.loads((products / 'Release-iphoneos/LocalAIStudio.app/Info.plist').read_bytes())
-          for key in ('UIFileSharingEnabled', 'LSSupportsOpeningDocumentsInPlace'):
-              assert debug.get(key) is True, (key, debug.get(key))
-              assert key not in release or release[key] is False, (key, release[key])
-          print('Files fixture access is enabled only in the Debug test app.')
+          key = 'LSSupportsOpeningDocumentsInPlace'
+          assert debug.get(key) is True and release.get(key) is True, (debug.get(key), release.get(key))
+          assert debug.get('UIFileSharingEnabled') is True
+          assert not release.get('UIFileSharingEnabled', False)
+          print('Debug and Release share open-in-place support; only Debug exposes fixture documents.')
           PY
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
           xcrun simctl install "$SIMULATOR_ID" DerivedData/Build/Products/Debug-iphonesimulator/LocalAIStudio.app
