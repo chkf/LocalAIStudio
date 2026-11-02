@@ -34,8 +34,7 @@ targets:
         Debug:
           # Let UI tests select tiny fixtures seeded by CI through the actual Files picker.
           # Release builds do not expose the app's Documents directory.
-          INFOPLIST_KEY_UIFileSharingEnabled: YES
-          INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
+          INFOPLIST_FILE: UITests/ImportTestInfo.plist
   LocalAIStudioTests:
     type: bundle.unit-test
     platform: iOS
@@ -50,7 +49,9 @@ targets:
     type: bundle.ui-testing
     platform: iOS
     sources:
-      - UITests
+      - path: UITests
+        excludes:
+          - ImportTestInfo.plist
     dependencies:
       - target: LocalAIStudio
     settings:

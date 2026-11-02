@@ -18,10 +18,22 @@ struct DevicePage: View {
         return end.addingTimeInterval(-300)...end
     }
 
+    private var timeTicks: [Date] {
+        let window = timeWindow
+        return [window.lowerBound, window.lowerBound.addingTimeInterval(150), window.upperBound]
+    }
+
+    private static let axisTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 20) {
                     if let snapshot = monitor.snapshot {
                         samplingStatus(snapshot)
                         memorySection(snapshot)
@@ -46,6 +58,7 @@ struct DevicePage: View {
                 .padding(.vertical, 12)
             }
             .navigationTitle("设备")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -127,9 +140,13 @@ struct DevicePage: View {
         .chartXScale(domain: timeWindow)
         .chartYScale(domain: 0...max(1, Double(monitor.history.compactMap(\.appMemory).max() ?? 0) / 1_048_576 * 1.15))
         .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 3)) {
+            AxisMarks(values: timeTicks) { value in
                 AxisTick()
-                AxisValueLabel(format: .dateTime.hour().minute())
+                AxisValueLabel(anchor: value.index == 2 ? .topTrailing : (value.index == 0 ? .topLeading : .top)) {
+                    if let date = value.as(Date.self) {
+                        Text(Self.axisTimeFormatter.string(from: date)).fixedSize()
+                    }
+                }
             }
         }
         .chartYAxis {
@@ -175,9 +192,13 @@ struct DevicePage: View {
             .chartXScale(domain: timeWindow)
             .chartYScale(domain: 0...max(100, ceil((monitor.history.compactMap(\.cpuPercent).max() ?? 0) / 25) * 25))
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 3)) {
+                AxisMarks(values: timeTicks) { value in
                     AxisTick()
-                    AxisValueLabel(format: .dateTime.hour().minute())
+                    AxisValueLabel(anchor: value.index == 2 ? .topTrailing : (value.index == 0 ? .topLeading : .top)) {
+                        if let date = value.as(Date.self) {
+                            Text(Self.axisTimeFormatter.string(from: date)).fixedSize()
+                        }
+                    }
                 }
             }
             .chartYAxis {

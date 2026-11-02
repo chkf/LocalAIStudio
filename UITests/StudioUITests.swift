@@ -23,6 +23,7 @@ final class StudioUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["设备"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["deviceMemoryValue"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["settingsButton"].exists)
+        XCTAssertTrue(app.staticTexts["系统等级，非摄氏温度"].isHittable)
         snapshot(app, "Device-light")
     }
 
@@ -50,7 +51,10 @@ final class StudioUITests: XCTestCase {
 
         let beforeBackground = try sampleCount(count)
         XCUIDevice.shared.press(.home)
-        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+        let backgrounded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.state == .runningBackground || app.state == .runningBackgroundSuspended
+        }, object: nil)
+        wait(for: [backgrounded], timeout: 5)
         Thread.sleep(forTimeInterval: 3)
         app.activate()
         XCTAssertTrue(cpu.label.contains("%"), "Resume must retain the last CPU value while rebuilding its baseline.")

@@ -96,9 +96,20 @@ jobs:
             build-for-testing 2>&1 | tee test-build.log
 
       - name: Prepare real Files picker fixtures
+        id: fixtures
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
         run: |
+          python3 - <<'PY'
+          import pathlib, plistlib
+          products = pathlib.Path('DerivedData/Build/Products')
+          debug = plistlib.loads((products / 'Debug-iphonesimulator/LocalAIStudio.app/Info.plist').read_bytes())
+          release = plistlib.loads((products / 'Release-iphoneos/LocalAIStudio.app/Info.plist').read_bytes())
+          for key in ('UIFileSharingEnabled', 'LSSupportsOpeningDocumentsInPlace'):
+              assert debug.get(key) is True, (key, debug.get(key))
+              assert key not in release or release[key] is False, (key, release[key])
+          print('Files fixture access is enabled only in the Debug test app.')
+          PY
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
           xcrun simctl install "$SIMULATOR_ID" DerivedData/Build/Products/Debug-iphonesimulator/LocalAIStudio.app
           APP_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio data)
@@ -130,6 +141,7 @@ jobs:
             test-without-building 2>&1 | tee test.log
 
       - name: Verify import sources remain intact
+        if: always() && steps.fixtures.outcome == 'success'
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
         run: |
