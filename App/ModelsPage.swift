@@ -151,8 +151,10 @@ private struct ModelDetail: View {
 }
 
 private struct DownloadSheet: View {
+    private enum Field: Hashable { case address, filename }
     @Environment(\.dismiss) private var dismiss
     @Environment(ModelLibrary.self) private var library
+    @FocusState private var focusedField: Field?
     @State private var address = ""
     @State private var filename = ""
     @State private var errorMessage: String?
@@ -164,9 +166,11 @@ private struct DownloadSheet: View {
                     TextField("https://…/model.litertlm", text: $address, axis: .vertical)
                         .textContentType(.URL).keyboardType(.URL)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .focused($focusedField, equals: .address)
                         .accessibilityIdentifier("downloadURL")
                     TextField("文件名（可选）", text: $filename)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .focused($focusedField, equals: .filename)
                         .accessibilityIdentifier("downloadFilename")
                 }
                 Section {
@@ -184,6 +188,7 @@ private struct DownloadSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("下载") {
+                        focusedField = nil
                         do {
                             let request = try DownloadRequest(address: address, name: filename)
                             guard let download = library.download else { return }

@@ -35,6 +35,7 @@ final class StudioUITests: XCTestCase {
         field.typeText("http://example.com/model.litertlm")
         app.buttons["startDownload"].tap()
         XCTAssertTrue(app.staticTexts["downloadError"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
         snapshot(app, "Download-validation")
         app.buttons["取消"].tap()
         XCTAssertTrue(app.navigationBars["模型"].exists)
