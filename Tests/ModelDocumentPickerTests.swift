@@ -4,35 +4,38 @@ import XCTest
 @testable import LocalAIStudio
 
 final class ModelDocumentPickerTests: XCTestCase {
-    func testAppDeclaresOpeningDocumentsInPlace() {
-        // Read the built app, not a test-only plist or an independently created picker.
-        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "LSSupportsOpeningDocumentsInPlace") as? Bool, true)
+    func testAppDisplayName() {
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "AI Studio")
     }
 
     @MainActor
-    func testSelectionForwardsURLWithoutReadingOrCopyingIt() {
-        let url = URL(fileURLWithPath: "/unavailable-provider/模型.litertlm")
-        var selections: [URL?] = []
-        let view = ModelDocumentPicker { selections.append($0) }
-        let coordinator = view.makeCoordinator()
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: false)
+    func testProductionPickerUsesCopyAndExplicitConfirmation() {
+        let coordinator = ModelDocumentPicker { _ in }.makeCoordinator()
+        // Exercise the actual factory used by makeUIViewController, not a lookalike picker.
+        let picker = ModelDocumentPicker.makePicker(delegate: coordinator)
+        XCTAssertEqual(picker.documentPickerMode, .import)
+        XCTAssertTrue(picker.allowsMultipleSelection)
+        XCTAssertTrue(picker.shouldShowFileExtensions)
+        XCTAssertTrue(picker.delegate === coordinator)
+    }
 
-        coordinator.documentPicker(picker, didPickDocumentsAt: [url])
-
-        XCTAssertEqual(selections.count, 1)
-        XCTAssertEqual(selections.first ?? nil, url)
+    @MainActor
+    func testSelectionForwardsEveryConfirmedCopy() {
+        let urls = [URL(fileURLWithPath: "/tmp/first.litertlm"), URL(fileURLWithPath: "/tmp/second.gguf")]
+        var selections: [[URL]] = []
+        let coordinator = ModelDocumentPicker { selections.append($0) }.makeCoordinator()
+        let picker = ModelDocumentPicker.makePicker(delegate: coordinator)
+        XCTAssertTrue(selections.isEmpty)
+        coordinator.documentPicker(picker, didPickDocumentsAt: urls)
+        XCTAssertEqual(selections, [urls])
     }
 
     @MainActor
     func testCancellationReturnsNoSelection() {
-        var selections: [URL?] = []
-        let view = ModelDocumentPicker { selections.append($0) }
-        let coordinator = view.makeCoordinator()
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: false)
-
+        var selections: [[URL]] = []
+        let coordinator = ModelDocumentPicker { selections.append($0) }.makeCoordinator()
+        let picker = ModelDocumentPicker.makePicker(delegate: coordinator)
         coordinator.documentPickerWasCancelled(picker)
-
-        XCTAssertEqual(selections.count, 1)
-        XCTAssertNil(selections.first ?? nil)
+        XCTAssertEqual(selections, [[]])
     }
 }

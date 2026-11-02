@@ -13,8 +13,8 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     GENERATE_INFOPLIST_FILE: YES
     CODE_SIGN_STYLE: Manual
-    CURRENT_PROJECT_VERSION: "2"
-    MARKETING_VERSION: "0.1.1"
+    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "0.1.2"
 
 packages:
   LiteRTLM:
@@ -36,10 +36,12 @@ targets:
         product: LiteRTLM
     settings:
       base:
+        # Preserve bundle identity and the existing app/model container on upgrade.
         PRODUCT_BUNDLE_IDENTIFIER: dev.example.localaistudio
-        INFOPLIST_KEY_CFBundleDisplayName: Local AI Studio
+        INFOPLIST_KEY_CFBundleDisplayName: AI Studio
+        INFOPLIST_KEY_CFBundleName: AI Studio
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        # The native picker opens provider URLs before ModelFiles copies them.
+        # Retained for document interoperability; the import picker now requests copies.
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:

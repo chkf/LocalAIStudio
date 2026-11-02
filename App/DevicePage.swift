@@ -82,8 +82,8 @@ struct DevicePage: View {
                 Text("RAM").font(.title2.bold())
                 layout {
                     VStack(alignment: .leading, spacing: 18) {
-                        memoryValue("已用", bytes: snapshot.systemMemory?.used, prominent: true)
-                        memoryValue("空闲", bytes: snapshot.systemMemory?.free, prominent: false)
+                        memoryValue("已用估算", bytes: snapshot.systemMemory?.used, prominent: true)
+                        memoryValue("文件缓存", bytes: snapshot.systemMemory?.fileBacked, prominent: false)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     memoryRing(snapshot.systemMemory?.usedFraction)
@@ -139,7 +139,7 @@ struct DevicePage: View {
         .padding(5)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.35), value: fraction)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("整机 RAM 已用比例")
+        .accessibilityLabel("整机 RAM 非缓存占用估算，不代表内存压力")
         .accessibilityValue(fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "无法读取")
         .accessibilityIdentifier("systemRAMGauge")
     }
@@ -239,11 +239,14 @@ struct DevicePage: View {
                 Section("整机 RAM") {
                     LabeledContent("总量", value: bytes(snapshot.physicalMemory))
                     if let memory = snapshot.systemMemory {
-                        LabeledContent("已用", value: bytes(memory.used))
-                        LabeledContent("空闲", value: bytes(memory.free))
+                        LabeledContent("已用估算（不含文件缓存）", value: bytes(memory.used))
+                        LabeledContent("文件缓存 / 映射页", value: bytes(memory.fileBacked))
+                        LabeledContent("可清理页", value: bytes(memory.purgeable))
+                        LabeledContent("空闲（含推测页）", value: bytes(memory.free))
+                        LabeledContent("非空闲（含缓存）", value: bytes(memory.occupied))
                         LabeledContent("活跃", value: bytes(memory.active))
                         LabeledContent("非活跃", value: bytes(memory.inactive))
-                        LabeledContent("有线", value: bytes(memory.wired))
+                        LabeledContent("固定驻留", value: bytes(memory.wired))
                         LabeledContent("压缩", value: bytes(memory.compressed))
                     } else {
                         Text("系统未返回整机内存统计。不会用 App 内存或进程预算替代。")
@@ -254,7 +257,8 @@ struct DevicePage: View {
                     LabeledContent("进程剩余预算", value: bytes(snapshot.availableMemory))
                 }
                 Section {
-                    Text("已用 = 总量 − Mach 空闲页（包含推测页）。已用中包含可回收缓存，不等于内存压力；各分类也不应简单相加。进程预算不是整机剩余 RAM。")
+                    Text("圆环估算 = 匿名页 − 可清理匿名页 + 固定驻留 + 压缩占用。文件缓存单列，不再用总量减空闲表示吃紧。非活跃页不一定可回收，文件映射页也不保证立即释放；各分类存在交叉，不能直接相加。")
+                    Text("这不是系统内存压力或可立即分配量。进程剩余预算仅针对本 App，不是整机剩余 RAM。")
                 }
             case .storage:
                 Section {
@@ -289,6 +293,10 @@ struct DevicePage: View {
                 Section("GPU") {
                     LabeledContent("Metal 设备", value: monitor.metalDeviceName ?? "不可用")
                     Text("没有整机 GPU 实时使用率或独立显存读数。")
+                }
+                Section("应用") {
+                    LabeledContent("名称", value: "AI Studio")
+                    LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
                 }
                 #if targetEnvironment(simulator)
                 Section { Text("模拟器读数来自宿主 Mac，不能用于评估 iPhone 性能。电池与进程预算需要真机验证。") }

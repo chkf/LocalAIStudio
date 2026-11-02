@@ -72,7 +72,7 @@ struct ModelsPage: View {
                     HStack(spacing: 12) {
                         ProgressView()
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("正在读取、复制并检查文件…")
+                            Text("正在检查并保存文件…")
                                 .font(.subheadline)
                             if let name = library.importingName {
                                 Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -106,11 +106,10 @@ struct ModelsPage: View {
                 }
             }
             .sheet(isPresented: $importing) {
-                ModelDocumentPicker { url in
+                ModelDocumentPicker { urls in
                     importing = false
-                    // Do not depend on the order of UIKit selection and SwiftUI dismissal.
-                    // Consume the selected URL directly; cancellation has no URL.
-                    if let url { Task { await library.importFiles([url]) } }
+                    // UIKit returns sandbox copies only after the user confirms Open.
+                    if !urls.isEmpty { Task { await library.importFiles(urls, copies: true) } }
                 }
             }
             .sheet(isPresented: $downloading) { DownloadSheet() }

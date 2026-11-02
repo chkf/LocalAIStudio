@@ -50,13 +50,45 @@ actor ModelFiles {
 
     /// Owned downloads can be hard-linked on the same volume. The caller removes their source only after success.
     func importFile(from source: URL, name: String? = nil, link: Bool = false) throws -> LocalModel {
+        try storeFile(from: source, name: name, transfer: link ? .link : .copy)
+    }
+
+    /// Only the native picker's sandbox copy is consumed; never the user's source file.
+    func importPickerCopy(from source: URL) throws -> LocalModel {
+        try checkPickerCopy(source)
+        return try storeFile(from: source, name: nil, transfer: .move)
+    }
+
+    func discardPickerCopies(_ urls: [URL]) throws {
+        for url in urls {
+            try checkPickerCopy(url)
+            do { try files.removeItem(at: url) }
+            catch CocoaError.fileNoSuchFile { continue } // Already moved into the library.
+        }
+    }
+
+    private func checkPickerCopy(_ url: URL) throws {
+        // Resolve directory aliases before testing ownership; a provider URL must never be moved/deleted.
+        let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+        let roots = [files.temporaryDirectory,
+                     files.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Inbox")]
+        guard url.isFileURL, roots.contains(where: {
+            path.hasPrefix($0.resolvingSymlinksInPath().standardizedFileURL.path + "/")
+        }) else {
+            throw ModelFileError.invalid("系统没有返回 App 内的导入副本，原文件未被改动。")
+        }
+    }
+
+    private enum Transfer { case copy, link, move }
+
+    private func storeFile(from source: URL, name: String?, transfer: Transfer) throws -> LocalModel {
         let accessed = source.startAccessingSecurityScopedResource()
         defer { if accessed { source.stopAccessingSecurityScopedResource() } }
         let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true, let size = values.fileSize else {
             throw ModelFileError.unsupportedFile
         }
-        if !link {
+        if transfer == .copy {
             let available = try directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage
             if let available, Int64(size) > available { throw ModelFileError.notEnoughSpace }
         }
@@ -67,10 +99,14 @@ actor ModelFiles {
         try files.createDirectory(at: staging, withIntermediateDirectories: false)
         do {
             try Task.checkCancellation()
-            if link {
+            switch transfer {
+            case .move:
+                // Both URLs are in this app's sandbox: adopt the system copy, without a second full copy.
+                try files.moveItem(at: source, to: stagedFile)
+            case .link:
                 // Killing the app during import must not discard an already completed download.
                 try files.linkItem(at: source, to: stagedFile)
-            } else {
+            case .copy:
                 var coordinationError: NSError?
                 var copyError: Error?
                 NSFileCoordinator().coordinate(readingItemAt: source, options: .withoutChanges, error: &coordinationError) { readableURL in

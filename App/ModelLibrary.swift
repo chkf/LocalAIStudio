@@ -34,7 +34,7 @@ final class ModelLibrary {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func importFiles(_ urls: [URL]) async {
+    func importFiles(_ urls: [URL], copies: Bool = false) async {
         guard let files, !isWriting else { return }
         isImporting = true
         defer {
@@ -47,13 +47,23 @@ final class ModelLibrary {
                 do {
                     try Task.checkCancellation()
                     self?.importingName = url.lastPathComponent
-                    let model = try await files.importFile(from: url)
+                    let model: LocalModel
+                    if copies { model = try await files.importPickerCopy(from: url) }
+                    else { model = try await files.importFile(from: url) }
                     self?.models.insert(model, at: 0)
                 } catch is CancellationError {
-                    return
+                    break
                 } catch {
                     self?.errorMessage = "\(url.lastPathComponent)：\(error.localizedDescription)"
-                    return
+                    break
+                }
+            }
+            // On failure/cancellation, also release copies not yet processed in the batch.
+            if copies {
+                do { try await files.discardPickerCopies(urls) }
+                catch {
+                    let previous = self?.errorMessage.map { "\($0)\n" } ?? ""
+                    self?.errorMessage = previous + "清理导入副本失败：\(error.localizedDescription)"
                 }
             }
         }
