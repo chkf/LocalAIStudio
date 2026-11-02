@@ -1,0 +1,32 @@
+name: LocalAIStudio
+options:
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    GENERATE_INFOPLIST_FILE: YES
+    CODE_SIGN_STYLE: Manual
+
+targets:
+  LocalAIStudio:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.localaistudio
+        INFOPLIST_KEY_CFBundleDisplayName: Local AI Studio
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+schemes:
+  LocalAIStudio:
+    build:
+      targets:
+        LocalAIStudio: all
+    run:
+      config: Debug
+    archive:
+      config: Release
