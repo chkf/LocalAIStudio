@@ -133,6 +133,7 @@ struct DevicePage: View {
         .overlay {
             Text(fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
                 .font(.largeTitle.bold()).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.35)
         }
         .frame(width: 138, height: 138)
         .padding(5)

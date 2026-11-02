@@ -51,11 +51,16 @@ final class ModelImportUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["模型"].exists)
         XCTAssertFalse(app.staticTexts["UI-Unsupported-File.txt"].exists)
 
-        // A failed import must not leave stale selection or presentation state behind.
+        // Require a new library row, not the row left by a previous successful test.
+        let imported = app.staticTexts.matching(identifier: "UI-Import-Test.litertlm")
+        let beforeRetry = imported.count
         openPicker(app)
         selectFixture("UI-Import-Test.litertlm", in: app)
         XCTAssertTrue(cancelButton(app).waitForNonExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["UI-Import-Test.litertlm"].firstMatch.waitForExistence(timeout: 15))
+        let added = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            imported.count > beforeRetry
+        }, object: nil)
+        wait(for: [added], timeout: 15)
         XCTAssertFalse(alert.exists)
     }
 
@@ -85,16 +90,18 @@ final class ModelImportUITests: XCTestCase {
 
     @MainActor
     private func selectFixture(_ name: String, in app: XCUIApplication) {
-        // CI seeds these small files in Documents; selection still goes through the real Files picker.
-        let file = text(app, [name, (name as NSString).deletingPathExtension])
+        // Scope queries to Files: the app underneath may already contain the same filename.
+        let picker = app.otherElements["Browse View (Picker)"].firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 10), app.debugDescription)
+        let file = text(picker, [name, (name as NSString).deletingPathExtension])
         if !file.exists {
             let browse = app.buttons.matching(NSPredicate(format: "label IN %@", ["Browse", "浏览"])).firstMatch
             if browse.exists { browse.tap() }
 
-            let local = text(app, ["On My iPhone", "我的 iPhone", "在我的 iPhone 上"])
+            let local = text(picker, ["On My iPhone", "我的 iPhone", "在我的 iPhone 上"])
             if local.waitForExistence(timeout: 5) {
                 local.tap()
-                let folder = text(app, ["Local AI Studio", "LocalAIStudio"])
+                let folder = text(picker, ["Local AI Studio", "LocalAIStudio"])
                 XCTAssertTrue(folder.waitForExistence(timeout: 10), app.debugDescription)
                 folder.tap()
             }
@@ -105,17 +112,16 @@ final class ModelImportUITests: XCTestCase {
             return
         }
         snapshot(app, "Import-file-selection")
-        let document = app.cells.containing(.staticText, identifier: file.label).firstMatch
+        let document = picker.cells.containing(.staticText, identifier: file.label).firstMatch
         XCTAssertTrue(document.exists, app.debugDescription)
-        // Select the document cell, not the thumbnail's Quick Look accessibility element.
         document.tap()
         let open = app.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "打开"])).firstMatch
         if open.waitForExistence(timeout: 2), open.isHittable { open.tap() }
     }
 
     @MainActor
-    private func text(_ app: XCUIApplication, _ labels: [String]) -> XCUIElement {
-        app.staticTexts.matching(NSPredicate(format: "label IN %@", labels)).firstMatch
+    private func text(_ root: XCUIElement, _ labels: [String]) -> XCUIElement {
+        root.staticTexts.matching(NSPredicate(format: "label IN %@", labels)).firstMatch
     }
 
     @MainActor
