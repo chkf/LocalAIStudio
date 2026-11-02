@@ -60,9 +60,9 @@ private struct MainView: View {
                 library.cancelImport()
                 chat.saveDraft()
                 chat.cancel()
+                Task { await chat.unload() }
                 Task {
                     await library.download?.pause()
-                    await chat.unload()
                 }
             }
         }

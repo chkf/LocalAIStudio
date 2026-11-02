@@ -6,7 +6,7 @@
 
 Google 提供官方 SwiftPM 产品 `LiteRTLM`，最低 iOS 15，Swift API 标为 Early Preview。原生 API 提供 Metal/CPU、流式输出、取消和模型元数据读取；Gemma 4 E4B 有官方链接的 `.litertlm` 发布文件。[Swift 指南](https://developers.google.com/edge/litert-lm/swift)、[E4B 模型卡](https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm)。
 
-本项目锁定上游提交 [`c642af8627ebdab909d7ba0e33a121d601b3c255`](https://github.com/google-ai-edge/LiteRT-LM/commit/c642af8627ebdab909d7ba0e33a121d601b3c255)，对应 v0.19.0 Swift 包修复。原因是 [v0.19.0 标签的 Package.swift](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.19.0/Package.swift) 仍引用 v0.18.1 二进制，而这一提交将二进制与新版 C API 对齐。使用固定提交和上游 XCFramework 校验和，避免跟随 `main` 漂移。CI 按[上游说明](https://github.com/google-ai-edge/LiteRT-LM/blob/c642af8627ebdab909d7ba0e33a121d601b3c255/samples/ios_and_mac/README.md)设置 `GIT_LFS_SKIP_SMUDGE=1`，不拉取不相关平台的预编译大文件。
+本项目锁定官方 **v0.18.1** 发布提交 [`bda624851d74be34d4e1f7fac1fc4155939539c7`](https://github.com/google-ai-edge/LiteRT-LM/commit/bda624851d74be34d4e1f7fac1fc4155939539c7)。[该版本的 Package.swift](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.1/Package.swift)直接引用同版本 XCFramework 及其校验和。选择依据来自实际编译：最初尝试的 v0.19.0 包更新提交 `c642af86` 在 [Actions 构建](https://github.com/chkf/LocalAIStudio/actions/runs/41417631648)中因上游 Swift 源码调用二进制头文件尚未提供的 `litert_lm_speculative_decoding_config_set_lenience` 而失败。本项目不修改下载的依赖源码或忽略未解析符号，改用同一发布版本的源码与二进制。CI 设置 `GIT_LFS_SKIP_SMUDGE=1`，避免拉取不相关平台的预编译大文件。
 
 ### 当前实现
 
@@ -14,12 +14,12 @@ Google 提供官方 SwiftPM 产品 `LiteRTLM`，最低 iOS 15，Swift API 标为
 - 单个 `TextRuntime` actor 持有原生 Engine/Conversation，加载、流式初始化及释放在 UI actor 之外执行。仅使用模型声明的 Metal 或 CPU 后端。
 - 同时只有一个生成任务。动态上下文最多 2,048 token，单次输出最多 512 token，暂不启用 thinking、视觉、音频或 LoRA。已有对话不做静默截断；超出引擎上下文会明确报错。
 - 取消调用原生 `Conversation.cancel()`，等待流的终止回调再卸载。原生初始化没有取消 API，因此加载中停止需等待初始化返回。
-- 上游没有显式 Engine.close；必须先释放 Conversation，再释放 Engine，原生对象由其 `deinit` 销毁。[生命周期源码](https://github.com/google-ai-edge/LiteRT-LM/blob/c642af8627ebdab909d7ba0e33a121d601b3c255/swift/Engine.swift)、[流与取消源码](https://github.com/google-ai-edge/LiteRT-LM/blob/c642af8627ebdab909d7ba0e33a121d601b3c255/swift/Conversation.swift)。
+- 上游没有显式 Engine.close；必须先释放 Conversation，再释放 Engine，原生对象由其 `deinit` 销毁。[生命周期源码](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.1/swift/Engine.swift)、[流与取消源码](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.1/swift/Conversation.swift)。
 - 加载耗时使用单调时钟测量。TTFT、tokens/s 和输出 token 数只采用引擎实际返回的 benchmark 数据；没有数据时留空，不把流式文本块当 token。
 - 生成前原子保存输入、模型选择和已完成对话。被系统终止后恢复输入，不宣称从原 token 继续。取消后的部分文字标为中断，不作为后续完整对话传给模型。
 - 读取当前进程的可分配内存预算；不把磁盘文件大小转换成峰值内存预测。未测量的文件仍存在 jetsam 风险，单任务、卸载与内存警告处理无法保证零闪退。
 
-LiteRT-LM 代码采用 [Apache-2.0](https://github.com/google-ai-edge/LiteRT-LM/blob/c642af8627ebdab909d7ba0e33a121d601b3c255/LICENSE)。模型权重遵循各自发布页的许可，不打包进 IPA。
+LiteRT-LM 代码采用 [Apache-2.0](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.1/LICENSE)。模型权重遵循各自发布页的许可，不打包进 IPA。
 
 ### 仍需真机验证
 

@@ -28,7 +28,7 @@ final class DownloadRequestTests: XCTestCase {
     func testFilenameCannotEscapeStorageOrHideControlCharacters() {
         for name in [
             "../model.gguf", "/tmp/model.gguf", "folder/model.gguf", "folder\\model.gguf",
-            ".hidden.gguf", "bad\u{0000}.gguf", "bad\nname.gguf", "model.zip", "model"
+            "bad\u{0000}.gguf", "bad\nname.gguf", "model.zip", "model"
         ] {
             XCTAssertThrowsError(try DownloadRequest(address: "https://example.com/download", name: name), name)
         }

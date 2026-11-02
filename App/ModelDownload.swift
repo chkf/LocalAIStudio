@@ -12,7 +12,7 @@ struct DownloadRequest: Codable, Equatable {
         }
         let proposedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let filename = proposedName.isEmpty ? url.lastPathComponent : proposedName
-        guard !filename.isEmpty, !filename.hasPrefix("."), filename == (filename as NSString).lastPathComponent,
+        guard !filename.isEmpty, filename == (filename as NSString).lastPathComponent,
               !filename.contains("\\"),
               filename.rangeOfCharacter(from: .controlCharacters) == nil,
               ModelFile.supportedExtensions.contains((filename as NSString).pathExtension.lowercased()) else {
@@ -101,11 +101,13 @@ final class ModelDownload: NSObject, URLSessionDownloadDelegate {
         values.isExcludedFromBackup = true
         try excluded.setResourceValues(values)
         super.init()
+        var interruptedImport = false
         if FileManager.default.fileExists(atPath: recordURL.path) {
             transfer = try JSONDecoder().decode(ModelTransfer.self, from: Data(contentsOf: recordURL))
             if let transfer {
                 _ = try DownloadRequest(address: transfer.request.url.absoluteString, name: transfer.request.name)
             }
+            interruptedImport = transfer?.phase == .importing
             transfer?.phase = .paused
             transfer?.canResume = FileManager.default.fileExists(atPath: resumeURL.path)
             transfer?.note = "上次下载已中断。继续时会尝试续传；无法续传时可重新下载。"
@@ -117,7 +119,13 @@ final class ModelDownload: NSObject, URLSessionDownloadDelegate {
             }
         }
         if let transfer, FileManager.default.fileExists(atPath: completedURL(transfer.id).path) {
-            self.transfer?.note = "文件已下载，尚未完成导入。继续可重试导入；重新下载会丢弃此文件。"
+            self.transfer?.note = interruptedImport
+                ? "上次导入状态待确认，请先检查模型库。继续会导入此文件；取消会清理下载副本。"
+                : "文件已下载，尚未完成导入。继续可重试导入；重新下载会丢弃此文件。"
+        }
+        if transfer == nil, let data = try savedResumeData() {
+            discardResumeData(data)
+            try removeIfPresent(resumeURL)
         }
     }
 
@@ -277,9 +285,10 @@ final class ModelDownload: NSObject, URLSessionDownloadDelegate {
             didImport(model)
             transfer = nil
             do {
+                // Once committed, removing the record makes any remaining download files reclaimable.
+                try removeIfPresent(recordURL)
                 try removeIfPresent(location)
                 try removeIfPresent(resumeURL)
-                try removeIfPresent(recordURL)
             } catch {
                 errorMessage = "模型已导入，但下载记录清理失败：\(error.localizedDescription)"
             }

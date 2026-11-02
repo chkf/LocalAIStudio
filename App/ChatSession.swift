@@ -75,7 +75,10 @@ final class ChatSession {
                 if let prompt = archive.pendingPrompt {
                     if draft.isEmpty { draft = prompt }
                     if let index = messages.firstIndex(where: { $0.id == archive.pendingMessageID }) {
-                        messages[index].isInterrupted = true
+                        // A saved stream may already include a partial assistant reply after this prompt.
+                        for messageIndex in index..<messages.endIndex {
+                            messages[messageIndex].isInterrupted = true
+                        }
                     }
                     status = "上次任务已中断，输入已恢复；需要重新生成"
                 }

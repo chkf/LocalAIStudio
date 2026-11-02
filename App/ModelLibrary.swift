@@ -74,8 +74,8 @@ final class ModelLibrary {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func fileURL(for model: LocalModel) async throws -> URL {
+    func fileURL(for model: LocalModel) throws -> URL {
         guard let files else { throw CocoaError(.fileReadNoSuchFile) }
-        return await files.fileURL(for: model)
+        return files.fileURL(for: model)
     }
 }

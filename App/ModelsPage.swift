@@ -101,7 +101,9 @@ struct ModelsPage: View {
                 if let model = pendingDelete {
                     Button("删除 \(model.name)", role: .destructive) {
                         Task {
-                            if chat.loadedModelID == model.id { await chat.unload() }
+                            if chat.loadedModelID == model.id || (chat.isBusy && chat.lastModelID == model.id) {
+                                await chat.unload()
+                            }
                             await library.delete(model)
                         }
                     }

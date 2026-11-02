@@ -66,6 +66,35 @@ final class ChatSessionTests: XCTestCase {
         XCTAssertNotNil(session.errorMessage)
     }
 
+    func testInterruptedPartialReplyIsPreservedAndMarkedWithItsPrompt() throws {
+        let folder = try directory()
+        let pendingID = UUID()
+        let archive: [String: Any] = [
+            "messages": [
+                ["id": UUID().uuidString, "role": "user", "text": "Earlier question", "date": 0, "isInterrupted": false],
+                ["id": UUID().uuidString, "role": "assistant", "text": "Completed answer", "date": 0, "isInterrupted": false],
+                ["id": pendingID.uuidString, "role": "user", "text": "Pending question", "date": 0, "isInterrupted": false],
+                ["id": UUID().uuidString, "role": "assistant", "text": "Partially generated answer", "date": 0, "isInterrupted": false]
+            ],
+            "draft": "", "pendingPrompt": "Pending question",
+            "pendingMessageID": pendingID.uuidString, "performanceRecords": []
+        ]
+        try JSONSerialization.data(withJSONObject: archive).write(to: folder.appendingPathComponent("conversation.json"))
+
+        let session = ChatSession(directory: folder)
+        XCTAssertEqual(session.draft, "Pending question")
+        XCTAssertEqual(session.messages.map(\.isInterrupted), [false, false, true, true])
+        XCTAssertEqual(session.messages.last?.text, "Partially generated answer")
+        XCTAssertFalse(session.isBusy)
+        XCTAssertNil(session.loadedModelID)
+
+        session.saveDraft()
+        XCTAssertNil(session.errorMessage)
+        let restoredAgain = ChatSession(directory: folder)
+        XCTAssertEqual(restoredAgain.messages.map(\.isInterrupted), [false, false, true, true])
+        XCTAssertEqual(restoredAgain.messages.last?.text, "Partially generated answer")
+    }
+
     func testExistingUnsentDraftWinsOverInterruptedPrompt() throws {
         let folder = try directory()
         let archive: [String: Any] = [

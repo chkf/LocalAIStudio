@@ -1,7 +1,7 @@
 LiteRT-LM
 Copyright Google LLC and the LiteRT-LM contributors.
 Source: https://github.com/google-ai-edge/LiteRT-LM
-Pinned revision: c642af8627ebdab909d7ba0e33a121d601b3c255
+Pinned revision: bda624851d74be34d4e1f7fac1fc4155939539c7 (v0.18.1)
 
 The application uses the official LiteRT-LM Swift package. Model weights have their own licenses and are not included.
 

@@ -43,7 +43,7 @@ actor ModelFiles {
         }.sorted { $0.importedAt > $1.importedAt }
     }
 
-    func fileURL(for model: LocalModel) -> URL {
+    nonisolated func fileURL(for model: LocalModel) -> URL {
         directory.appendingPathComponent(model.id.uuidString, isDirectory: true)
             .appendingPathComponent("model.\(model.format.fileExtension)")
     }

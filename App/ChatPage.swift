@@ -1,20 +1,22 @@
 import SwiftUI
+import UIKit
 import os
 
 struct ChatPage: View {
     @Environment(ModelLibrary.self) private var library
     @Environment(ChatSession.self) private var chat
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("chatModelID") private var selectedModelID = ""
     @State private var confirmingLoad = false
     @State private var confirmingClear = false
-    @State private var dispatching = false
+    @State private var sendTask: Task<Void, Never>?
     let openModels: () -> Void
 
     private var selectedModel: LocalModel? {
         library.models.first { $0.id.uuidString == selectedModelID && $0.format == .litertLM }
     }
-    private var busy: Bool { chat.isBusy || dispatching }
+    private var busy: Bool { chat.isBusy || sendTask != nil }
 
     var body: some View {
         @Bindable var chat = chat
@@ -67,7 +69,7 @@ struct ChatPage: View {
                         .lineLimit(1...6)
                         .accessibilityIdentifier("chatInput")
                     if busy {
-                        Button("停止", systemImage: "stop.fill") { chat.cancel() }
+                        Button("停止", systemImage: "stop.fill") { stop() }
                             .labelStyle(.iconOnly).buttonStyle(.bordered)
                             .accessibilityIdentifier("stopGeneration")
                     } else {
@@ -107,6 +109,9 @@ struct ChatPage: View {
                 Button("清空对话", role: .destructive) { Task { await chat.clear() } }
             }
             .onDisappear { chat.saveDraft() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background { stop() }
+            }
         }
     }
 
@@ -151,11 +156,21 @@ struct ChatPage: View {
 
     private func send() {
         guard let model = selectedModel, !busy else { return }
-        dispatching = true
-        Task {
-            defer { dispatching = false }
-            do { await chat.send(model: model, fileURL: try await library.fileURL(for: model)) }
+        sendTask = Task {
+            defer { sendTask = nil }
+            do {
+                try Task.checkCancellation()
+                guard UIApplication.shared.applicationState == .active else { return }
+                await chat.send(model: model, fileURL: try library.fileURL(for: model))
+            } catch is CancellationError {
+                return
+            }
             catch { chat.errorMessage = error.localizedDescription }
         }
+    }
+
+    private func stop() {
+        sendTask?.cancel()
+        chat.cancel()
     }
 }
