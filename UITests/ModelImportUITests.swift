@@ -50,6 +50,13 @@ final class ModelImportUITests: XCTestCase {
         alert.buttons["好"].tap()
         XCTAssertTrue(app.navigationBars["模型"].exists)
         XCTAssertFalse(app.staticTexts["UI-Unsupported-File.txt"].exists)
+
+        // A failed import must not leave stale selection or presentation state behind.
+        openPicker(app)
+        selectFixture("UI-Import-Test.litertlm", in: app)
+        XCTAssertTrue(cancelButton(app).waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["UI-Import-Test.litertlm"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(alert.exists)
     }
 
     @MainActor
@@ -72,7 +79,8 @@ final class ModelImportUITests: XCTestCase {
             XCTAssertTrue(directImport.waitForExistence(timeout: 5))
             directImport.tap()
         }
-        XCTAssertTrue(cancelButton(app).waitForExistence(timeout: 10), app.debugDescription)
+        // The system Files service can cold-start slowly on CI; wait for its actual UI.
+        XCTAssertTrue(cancelButton(app).waitForExistence(timeout: 30), app.debugDescription)
     }
 
     @MainActor
@@ -99,8 +107,8 @@ final class ModelImportUITests: XCTestCase {
         snapshot(app, "Import-file-selection")
         let document = app.cells.containing(.staticText, identifier: file.label).firstMatch
         XCTAssertTrue(document.exists, app.debugDescription)
-        // Files previews can cover the thumbnail's accessibility image. Tap its visible center.
-        document.images.firstMatch.coordinate(withNormalizedOffset: .init(dx: 0.5, dy: 0.5)).tap()
+        // Select the document cell, not the thumbnail's Quick Look accessibility element.
+        document.tap()
         let open = app.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "打开"])).firstMatch
         if open.waitForExistence(timeout: 2), open.isHittable { open.tap() }
     }
