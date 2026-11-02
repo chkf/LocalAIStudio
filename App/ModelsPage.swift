@@ -106,8 +106,8 @@ struct ModelsPage: View {
                     .accessibilityIdentifier("addModel")
                 }
             }
-            // Choose one file, not a directory. Inspect its content after the picker returns its scoped URL.
-            .fileImporter(isPresented: $importing, allowedContentTypes: [.data]) { result in
+            // Accept arbitrary model file types; ModelFiles verifies the selected URL is a regular file.
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.item]) { result in
                 switch result {
                 case .success(let url): Task { await library.importFiles([url]) }
                 case .failure(let error): library.errorMessage = error.localizedDescription
