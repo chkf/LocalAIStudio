@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
@@ -56,8 +56,11 @@ jobs:
                   assert info.get(key), f'Missing {key} from app bundle'
               assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
               assert ipa.getinfo(app + 'Frameworks/CLiteRTLM.framework/CLiteRTLM').file_size > 0
+              primary_icon = info.get('CFBundleIcons', {}).get('CFBundlePrimaryIcon', {})
+              assert primary_icon.get('CFBundleIconName') == 'AppIcon', 'Missing AppIcon registration'
+              assert ipa.getinfo(app + 'Assets.car').file_size > 0
               assert ipa.testzip() is None, 'Corrupt IPA entry'
-          print('Unsigned IPA structure and app version metadata verified.')
+          print('Unsigned IPA structure, app version metadata and icon registration verified.')
           PY
 
       - uses: actions/upload-artifact@v4
@@ -66,7 +69,36 @@ jobs:
           path: LocalAIStudio-unsigned.ipa
           if-no-files-found: error
 
-      - name: Select an available iOS 26 iPhone simulator
+      - name: Render Apple icon previews
+        run: |
+          icon_developer_dir="$(xcode-select -p)"
+          icon_tool="${icon_developer_dir%/Developer}/Applications/Icon Composer.app/Contents/Executables/ictool"
+          mkdir -p build/icon
+          "$icon_tool" --version
+          for appearance in Default Dark TintedLight TintedDark ClearLight ClearDark; do
+            "$icon_tool" Resources/AppIcon.icon \
+              --export-image \
+              --output-file "build/icon/preview-${appearance}.png" \
+              --platform iOS --rendition "$appearance" \
+              --width 1024 --height 1024 --scale 1
+          done
+          "$icon_tool" Resources/AppIcon.icon \
+            --export-image \
+            --output-file build/icon/preview-Default-iOS26.png \
+            --platform iOS --rendition Default \
+            --width 1024 --height 1024 --scale 1 \
+            --design-generation 26
+
+      - name: Upload icon source and previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalAIStudio-IconComposer
+          path: |
+            build/icon/preview-*.png
+            Resources/AppIcon.icon
+          if-no-files-found: error
+
+      - name: Select an available iOS 26 or 27 iPhone simulator
         if: ${{ github.event_name == 'pull_request' }}
         id: simulator
         run: |
@@ -75,11 +107,11 @@ jobs:
           devices = json.loads(subprocess.check_output([
               'xcrun', 'simctl', 'list', 'devices', 'available', '--json'
           ]))['devices']
-          iphones = [device for runtime, items in devices.items()
-                     if '.iOS-26-' in runtime
+          iphones = [device for runtime, items in sorted(devices.items())
+                     if '.iOS-26-' in runtime or '.iOS-27-' in runtime
                      for device in items if device['name'].startswith('iPhone')]
           if not iphones:
-              raise SystemExit('No available iOS 26 iPhone simulator on this runner')
+              raise SystemExit('No available iOS 26 or 27 iPhone simulator on this runner')
           device = iphones[0]
           print(f"Using {device['name']}: {device['udid']}")
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:

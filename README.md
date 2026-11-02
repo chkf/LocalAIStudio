@@ -33,23 +33,26 @@ See [the product plan](docs/PLAN.md), [inference research and exact compatibilit
 
 ## Build and test
 
-Develop from Windows/WSL2 and use the macOS GitHub Actions runner for Xcode builds. CI runs automatically: pull requests targeting `main` build the unsigned IPA and run all simulator unit/UI tests; pushes to `main` build and upload the unsigned IPA without re-running tests. No manual workflow dispatch is required. On pull requests it runs:
+Develop from Windows/WSL2 and use the Xcode 27 macOS GitHub Actions runner for builds. CI runs automatically: pull requests targeting `main` build the unsigned IPA and run all simulator unit/UI tests; pushes to `main` build and upload the unsigned IPA without re-running tests. No manual workflow dispatch is required. On pull requests it runs:
 
 1. XcodeGen project generation.
 2. Unsigned iPhone Release compilation.
-3. Packaging of LocalAIStudio-unsigned.ipa.
-4. Unit tests and UI tests on an available iOS 26 iPhone simulator, including tab/background monitoring, settings persistence and actual Files selection/import/error/cancel interaction.
+3. Packaging of LocalAIStudio-unsigned.ipa with the layered app icon, plus export of the icon source and seven Apple-rendered previews.
+4. Unit tests and UI tests on an available iOS 26 or 27 iPhone simulator (preferring iOS 26 when available), including tab/background monitoring, settings persistence and actual Files selection/import/error/cancel interaction.
 5. Upload of the IPA, test results/logs and UI screenshots.
 
 GitHub downloads the `LocalAIStudio-unsigned` artifact as a ZIP archive containing
 `LocalAIStudio-unsigned.ipa`. Extract the outer ZIP once, then pass the **IPA**
 to your local signing tool. The IPA itself is an archive and should remain
 intact for signing. CI checks its ZIP integrity, executable, embedded LiteRT-LM
-framework and app version metadata before uploading it.
+framework, app version metadata, icon registration and compiled asset catalog before uploading it.
+
+The `LocalAIStudio-IconComposer` artifact contains the editable layered icon and
+previews; the compiled icon is included in the IPA. See [icon source and rendering](docs/icon-composer.md).
 
 The LiteRT-LM dependency is pinned to the official v0.18.1 commit rather than a floating branch; see [the dependency explanation](docs/INFERENCE.md). Model weights are not included.
 
-On a Mac with Xcode 26 and XcodeGen:
+On a Mac with Xcode 27 and XcodeGen:
 
 ```sh
 export GIT_LFS_SKIP_SMUDGE=1
