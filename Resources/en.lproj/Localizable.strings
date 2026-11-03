@@ -186,3 +186,13 @@
 "语音输入使用设备端识别；朗读可选择系统声音或导入的 Kokoro 模型。" = "Speech input uses on-device recognition. Playback can use system voices or imported Kokoro models.";
 "音色编号沿用模型音色表；官方多语言包的中文音色从 45 开始。" = "Voice IDs follow the model voice table. Chinese voices in the official multilingual pack start at 45.";
 "下载后可离线使用。支持 sherpa-onnx 格式的 Kokoro v1.0 模型包，需包含 ONNX 权重、voices.bin、tokens.txt 和中英文词典；不支持直接导入任意 TTS 权重。" = "Works offline after downloading. Supports sherpa-onnx Kokoro v1.0 packages containing ONNX weights, voices.bin, tokens.txt and Chinese/English lexicons. Other TTS weights are not supported.";
+
+// Web tools
+"联网工具" = "Web tools";
+"允许联网" = "Allow web access";
+"获取搜索 API Key" = "Get a search API key";
+"联网设置" = "Web settings";
+"联网记录" = "Web activity";
+"网页来源" = "Web sources";
+"联网默认关闭。开启后，模型可搜索和读取公开网页；搜索词和链接会发给对应服务。搜索需要自己的 Brave Key，网页读取无需 Key；Key 只保存在本机钥匙串。" = "Web access is off by default. When enabled, search terms and URLs are sent to the relevant services. Search requires your own Brave key; reading public pages does not. The key is stored in this device’s Keychain.";
+"联网调用会增加等待时间和上下文占用；需要模型正确输出工具请求，部分模型可能不兼容。搜索服务按你的账户额度计费。" = "Web tools add latency and context usage. The model must produce valid tool requests; some models may be incompatible. Search usage is billed under your provider account.";

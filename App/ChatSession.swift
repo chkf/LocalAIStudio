@@ -12,6 +12,8 @@ struct ChatMessage: Identifiable, Codable, Sendable {
     var text: String
     var date = Date()
     var isInterrupted = false
+    var webSources: [WebSource]? = nil
+    var webActivity: [String]? = nil
 }
 
 struct InferenceRecord: Identifiable, Codable, Sendable {
@@ -39,6 +41,8 @@ struct ChatPreferences: Codable, Equatable, Sendable {
     var autoSpeak = false
     var speechLanguage = "zh-CN"
     var voiceIdentifier = ""
+    // Optional so older saved preferences decode without a migration.
+    var webEnabled: Bool? = nil
 }
 
 private struct ChatArchive: Codable {
@@ -69,6 +73,8 @@ final class ChatSession {
     private(set) var performanceRecords: [InferenceRecord] = []
 
     @ObservationIgnored private let runtime = TextRuntime()
+    @ObservationIgnored private let webTools = WebTools()
+    @ObservationIgnored private var webOperation: Task<WebToolResult, Error>?
     @ObservationIgnored private let archiveURL: URL
     @ObservationIgnored private let preferencesURL: URL
     @ObservationIgnored private var operation: Task<Void, Never>?
@@ -164,6 +170,7 @@ final class ChatSession {
     func cancel() {
         guard operation != nil, let messageID = pendingMessageID else { return }
         cancellationRequested = true
+        webOperation?.cancel()
         status = "正在停止；模型加载期间需等待加载结束"
         // Drain the native stream to its terminal callback before releasing the engine.
         // Cancelling the Swift task would end iteration before native inference has stopped.
@@ -217,6 +224,7 @@ final class ChatSession {
         let assistantID = UUID()
         defer {
             operation = nil
+            webOperation = nil
             if unloadOperation == nil { isBusy = false }
         }
         do {
@@ -234,7 +242,16 @@ final class ChatSession {
             if cancellationRequested { throw CancellationError() }
             status = "正在生成"
             messages.append(ChatMessage(id: assistantID, role: .assistant, text: ""))
-            let stream = await runtime.stream(prompt: prompt, messageID: userID, history: history, maxOutputTokens: options.maxOutputTokens)
+            let effectivePrompt: String
+            if options.webEnabled == true {
+                effectivePrompt = try await prepareWebAnswer(prompt: prompt, userID: userID, assistantID: assistantID,
+                                                           history: history)
+                status = "正在整理联网结果…"
+            } else { effectivePrompt = prompt }
+            if cancellationRequested { throw CancellationError() }
+            let stream = try await runtime.stream(prompt: effectivePrompt, messageID: userID, history: history,
+                                                  maxOutputTokens: options.maxOutputTokens,
+                                                  reset: options.webEnabled == true)
             if cancellationRequested { try await runtime.cancel(messageID: userID) }
             for try await chunk in stream {
                 if !cancellationRequested, let index = messages.firstIndex(where: { $0.id == assistantID }) {
@@ -279,6 +296,48 @@ final class ChatSession {
         saveDraft()
     }
 
+    private func prepareWebAnswer(prompt: String, userID: UUID, assistantID: UUID,
+                                  history: [ChatMessage]) async throws -> String {
+        let key = try WebSearchKey.read()
+        var results: [WebToolResult] = []
+        var calls: [WebToolCall] = []
+        for _ in 0..<WebAgent.maxCalls {
+            if cancellationRequested { throw CancellationError() }
+            status = "正在选择联网工具…"
+            let planning = try WebAgent.prompt(request: prompt, results: results, planning: true, searchAvailable: !key.isEmpty)
+            let stream = try await runtime.stream(prompt: planning, messageID: userID, history: history,
+                                                  maxOutputTokens: 512, reset: true, planning: true)
+            if cancellationRequested { try await runtime.cancel(messageID: userID) }
+            var output = ""
+            for try await chunk in stream {
+                if !cancellationRequested { output += chunk }
+            }
+            if cancellationRequested { throw CancellationError() }
+            let call = try WebToolCall.parse(output)
+            if call.tool == .answer { break }
+            if calls.contains(call) { break }
+            calls.append(call)
+            let label = call.tool == .web_search ? "搜索：\(call.query!)" : "读取：\(call.url!)"
+            status = label
+            if let index = messages.firstIndex(where: { $0.id == assistantID }) {
+                messages[index].webActivity = (messages[index].webActivity ?? []) + [label]
+            }
+            let job = Task { try await webTools.execute(call, searchKey: key) }
+            webOperation = job
+            let result = try await job.value
+            webOperation = nil
+            if cancellationRequested { throw CancellationError() }
+            results.append(result)
+            if let index = messages.firstIndex(where: { $0.id == assistantID }) {
+                var sources = messages[index].webSources ?? []
+                for source in result.sources where !sources.contains(where: { $0.url == source.url }) { sources.append(source) }
+                messages[index].webSources = sources
+                if let error = result.error { messages[index].webActivity?.append(error) }
+            }
+        }
+        return try WebAgent.prompt(request: prompt, results: results, planning: false, searchAvailable: !key.isEmpty)
+    }
+
     private func persist() throws {
         guard archiveIsReadable else { throw ChatError.unreadableArchive }
         let archive = ChatArchive(
@@ -302,12 +361,18 @@ private actor TextRuntime {
     private var conversation: Conversation?
     private let gguf = GGUFTextRuntime()
     private let mlx = MLXTextRuntime()
+    private var options = ChatPreferences()
     private var currentFormat: ModelFormat?
     private var activeMessageID: UUID?
     private(set) var backendName = ""
 
     func load(fileURL: URL, format: ModelFormat, history: [ChatMessage], options: ChatPreferences) async throws -> Double {
         await unload()
+        var options = options
+        if options.webEnabled == true {
+            options.systemPrompt += "\n\n" + WebAgent.systemInstruction
+        }
+        self.options = options
         if format == .mlxBundle {
             guard options.backend != "cpu" else { throw ChatError.unsupportedMLXCPU }
             guard !options.enableSpeculativeDecoding else { throw ChatError.unsupportedSpeculativeDecoding }
@@ -332,28 +397,33 @@ private actor TextRuntime {
         let loadedEngine = Engine(engineConfig: configuration)
         engine = loadedEngine
         try await loadedEngine.initialize()
-        let initialMessages = history.map {
-            Message($0.text, role: $0.role == .user ? .user : .model)
-        }
-        let instruction = options.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        conversation = try await loadedEngine.createConversation(with: ConversationConfig(
-            systemMessage: instruction.isEmpty ? nil : Message(instruction, role: .system),
-            initialMessages: initialMessages,
-            samplerConfig: try SamplerConfig(
-                topK: options.topK, topP: Float(options.topP), temperature: Float(options.temperature)
-            ),
-            thinkingConfig: ThinkingConfig(enableThinking: options.enableThinking,
-                                           thinkingTokenBudget: options.enableThinking ? min(options.maxOutputTokens / 2, 512) : 0),
-            automaticToolCalling: false,
-            enableSpeculativeDecoding: options.enableSpeculativeDecoding
-        ))
+        try await resetConversation(history: history)
         currentFormat = .litertLM
         backendName = configuration.backend == .gpu ? "Metal" : "CPU"
         let elapsed = start.duration(to: .now).components
         return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
     }
 
-    func stream(prompt: String, messageID: UUID, history: [ChatMessage], maxOutputTokens: Int) async -> AsyncThrowingStream<String, Error> {
+    private func resetConversation(history: [ChatMessage], planning: Bool = false) async throws {
+        let thinking = options.enableThinking && !planning
+        let initialMessages = history.map {
+            Message($0.text, role: $0.role == .user ? .user : .model)
+        }
+        let instruction = options.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        conversation = try await engine!.createConversation(with: ConversationConfig(
+            systemMessage: instruction.isEmpty ? nil : Message(instruction, role: .system),
+            initialMessages: initialMessages,
+            samplerConfig: try SamplerConfig(
+                topK: options.topK, topP: Float(options.topP), temperature: planning ? 0.1 : Float(options.temperature)
+            ),
+            thinkingConfig: ThinkingConfig(enableThinking: thinking,
+                                           thinkingTokenBudget: thinking ? min(options.maxOutputTokens / 2, 512) : 0),
+            automaticToolCalling: false,
+            enableSpeculativeDecoding: options.enableSpeculativeDecoding
+        ))
+    }
+
+    func stream(prompt: String, messageID: UUID, history: [ChatMessage], maxOutputTokens: Int, reset: Bool = false, planning: Bool = false) async throws -> AsyncThrowingStream<String, Error> {
         activeMessageID = messageID
         if currentFormat == .gguf {
             return await gguf.stream(prompt: prompt, history: history, maxOutputTokens: maxOutputTokens)
@@ -363,6 +433,7 @@ private actor TextRuntime {
                 .map { (isUser: $0.role == .user, text: $0.text) }
             return await mlx.stream(prompt: prompt, history: messages, maxOutputTokens: maxOutputTokens)
         }
+        if reset { try await resetConversation(history: history, planning: planning) }
         let conversation = conversation!
         return AsyncThrowingStream { continuation in
             Task {
@@ -434,7 +505,7 @@ private actor TextRuntime {
         }
         let maximum = info.maxContextTokens()
         // Reserve space for input as output limits increase, within the model's advertised maximum.
-        let preferredContext = max(2048, maxOutputTokens + 512)
+        let preferredContext = max(options.webEnabled == true ? 8192 : 2048, maxOutputTokens + 512)
         let context = info.isDynamicContext() && maximum > 0 ? min(preferredContext, maximum) : nil
         let cache = URL.cachesDirectory.appendingPathComponent("LiteRT-LM", isDirectory: true)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)

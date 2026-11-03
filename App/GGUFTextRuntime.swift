@@ -70,7 +70,7 @@ actor GGUFTextRuntime {
         }
         model = loaded
         var contextParams = llama_context_default_params()
-        contextParams.n_ctx = UInt32(min(8192, max(2048, options.maxOutputTokens + 512)))
+        contextParams.n_ctx = UInt32(min(8192, max(options.webEnabled == true ? 8192 : 2048, options.maxOutputTokens + 512)))
         contextParams.n_batch = 512
         contextParams.n_ubatch = 512
         let cores = max(1, min(6, ProcessInfo.processInfo.activeProcessorCount - 1))

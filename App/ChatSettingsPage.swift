@@ -9,6 +9,10 @@ struct ChatSettingsPage: View {
     @State private var topK = ""
     @State private var topP = ""
     @State private var temperature = ""
+    @State private var searchKey = ""
+    @State private var originalSearchKey = ""
+    @State private var settingsError: String?
+    @State private var hasLoaded = false
 
     private var editedOptions: ChatPreferences? {
         guard let tokens = Int(tokenLimit), (128...4096).contains(tokens),
@@ -51,6 +55,20 @@ struct ChatSettingsPage: View {
                         .frame(minHeight: 120)
                         .accessibilityIdentifier("systemPromptEditor")
                 }
+                Section("联网工具") {
+                    Toggle("允许联网", isOn: Binding(
+                        get: { options.webEnabled == true }, set: { options.webEnabled = $0 }
+                    ))
+                    .accessibilityIdentifier("webAccessToggle")
+                    SecureField("Brave Search API Key", text: $searchKey)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .accessibilityIdentifier("webSearchKey")
+                    Link("获取搜索 API Key", destination: URL(string: "https://api-dashboard.search.brave.com/")!)
+                    Text("联网默认关闭。开启后，模型可搜索和读取公开网页；搜索词和链接会发给对应服务。搜索需要自己的 Brave Key，网页读取无需 Key；Key 只保存在本机钥匙串。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("联网调用会增加等待时间和上下文占用；需要模型正确输出工具请求，部分模型可能不兼容。搜索服务按你的账户额度计费。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Audio") {
                     Toggle("自动朗读回复", isOn: $options.autoSpeak)
                     Picker("语音语言", selection: $options.speechLanguage) {
@@ -82,19 +100,31 @@ struct ChatSettingsPage: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("应用") {
                         guard let updated = editedOptions else { return }
-                        Task { await chat.applyPreferences(updated); dismiss() }
+                        do {
+                            if searchKey != originalSearchKey { try WebSearchKey.save(searchKey) }
+                            Task { await chat.applyPreferences(updated); dismiss() }
+                        } catch { settingsError = error.localizedDescription }
                     }
                     .disabled(chat.isBusy || editedOptions == nil)
                     .accessibilityIdentifier("applyChatSettings")
                 }
             }
             .onAppear {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                do { searchKey = try WebSearchKey.read(); originalSearchKey = searchKey }
+                catch { settingsError = error.localizedDescription }
                 options = chat.preferences
                 tokenLimit = String(options.maxOutputTokens)
                 topK = String(options.topK)
                 topP = options.topP.formatted(.number.grouping(.never))
                 temperature = options.temperature.formatted(.number.grouping(.never))
             }
+            .alert("联网设置", isPresented: Binding(
+                get: { settingsError != nil }, set: { if !$0 { settingsError = nil } }
+            )) {
+                Button("好") { settingsError = nil }
+            } message: { Text(settingsError ?? "") }
             .onChange(of: options.speechLanguage) { _, _ in options.voiceIdentifier = "" }
         }
     }

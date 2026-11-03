@@ -55,6 +55,23 @@ struct ChatPage: View {
                                                     Button("停止朗读", systemImage: "speaker.slash") { speech.stopSpeaking() }
                                                 }
                                             }
+                                        if let activity = message.webActivity, !activity.isEmpty {
+                                            DisclosureGroup("联网记录") {
+                                                ForEach(Array(activity.enumerated()), id: \.offset) { _, line in
+                                                    Text(line).font(.caption).foregroundStyle(.secondary)
+                                                }
+                                            }
+                                        }
+                                        if let sources = message.webSources, !sources.isEmpty {
+                                            DisclosureGroup("网页来源") {
+                                                ForEach(Array(sources.enumerated()), id: \.offset) { index, source in
+                                                    Link(destination: source.url) {
+                                                        Text("\(index + 1). \(source.title)").font(.caption)
+                                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                                    }
+                                                }
+                                            }
+                                        }
                                         if message.isInterrupted {
                                             Text("已中断").font(.caption).foregroundStyle(.secondary)
                                         }
@@ -83,6 +100,10 @@ struct ChatPage: View {
             )
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
+                    if chat.isBusy, chat.preferences.webEnabled == true {
+                        ProgressView(chat.status).font(.caption).lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     if speech.isSynthesizing {
                         HStack {
                             ProgressView()
@@ -198,6 +219,9 @@ struct ChatPage: View {
             }
             .disabled(busy)
             Spacer()
+            if chat.preferences.webEnabled == true {
+                Image(systemName: "network").foregroundStyle(.tint).accessibilityLabel("允许联网")
+            }
             if chat.loadedModelID != nil {
                 Label("已加载", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
             }

@@ -10,6 +10,24 @@ final class ChatSessionTests: XCTestCase {
         return directory
     }
 
+    func testLegacyPreferencesKeepNetworkingOff() throws {
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(ChatPreferences())) as! [String: Any]
+        object.removeValue(forKey: "webEnabled")
+        let oldData = try JSONSerialization.data(withJSONObject: object)
+        let restored = try JSONDecoder().decode(ChatPreferences.self, from: oldData)
+        XCTAssertNotEqual(restored.webEnabled, true)
+    }
+
+    func testWebSourcesRoundTripWithoutChangingText() throws {
+        var message = ChatMessage(role: .assistant, text: "A sourced answer")
+        message.webSources = [WebSource(title: "Example", url: URL(string: "https://example.com")!, excerpt: "Evidence")]
+        message.webActivity = ["Search completed"]
+        let restored = try JSONDecoder().decode(ChatMessage.self, from: JSONEncoder().encode(message))
+        XCTAssertEqual(restored.webSources, message.webSources)
+        XCTAssertEqual(restored.webActivity, message.webActivity)
+        XCTAssertEqual(restored.text, message.text)
+    }
+
     func testDraftSurvivesRelaunchAndClear() async throws {
         let folder = try directory()
         let session = ChatSession(directory: folder)
