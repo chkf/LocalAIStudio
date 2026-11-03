@@ -65,6 +65,16 @@ struct ChatPage: View {
                         .accessibilityIdentifier("chatStatus")
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 25).onEnded { gesture in
+                    if gesture.translation.height > 40 &&
+                        abs(gesture.translation.width) < gesture.translation.height {
+                        messageFocused = false
+                    }
+                }
+            )
             .safeAreaInset(edge: .bottom) {
                 HStack(alignment: .bottom, spacing: 12) {
                     TextField("发送消息…", text: $chat.draft, axis: .vertical)
@@ -100,11 +110,6 @@ struct ChatPage: View {
                             .disabled(chat.loadedModelID == nil && !chat.isBusy)
                         Button("清空对话", systemImage: "trash", role: .destructive) { confirmingClear = true }
                     }
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("完成") { messageFocused = false }
-                        .accessibilityIdentifier("dismissChatKeyboard")
                 }
             }
             .confirmationDialog("首次尝试这个模型", isPresented: $confirmingLoad, titleVisibility: .visible) {

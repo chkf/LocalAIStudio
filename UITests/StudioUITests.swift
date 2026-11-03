@@ -2,16 +2,16 @@ import XCTest
 
 final class StudioUITests: XCTestCase {
     @MainActor
-    func testChatKeyboardHasAnExplicitDismissAction() {
+    func testChatKeyboardDismissesWithDownwardSwipeOnShortConversation() {
         let app = XCUIApplication()
         app.launch()
         let input = app.descendants(matching: .any)["chatInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 15))
         input.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
-        let done = app.buttons["dismissChatKeyboard"]
-        XCTAssertTrue(done.waitForExistence(timeout: 5), app.debugDescription)
-        done.tap()
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.56))
+        start.press(forDuration: 0.1, thenDragTo: end)
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
     }
 
