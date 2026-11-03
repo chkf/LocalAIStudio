@@ -6,7 +6,7 @@ A lightweight native iOS app for on-device AI, model files and device monitoring
 
 ## Changes in 0.1.2 (3)
 
-- The app's display/bundle names are **AI Studio**. The repository, Xcode target and bundle identifier remain unchanged so existing installations can retain their data.
+- The home-screen display name is **AI Studio**. The repository, internal product name and bundle identifier remain unchanged so existing installations can retain their data.
 - Files imports now use `UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)` with multiple selection. Select files, then confirm **Open**. Every returned URL is processed; cancellation before confirmation imports nothing.
 - The system creates sandbox copies. The app moves those copies through its existing validated, atomic model-library staging area rather than reading the external provider URL in place or making a second full copy. Owned temporary copies remaining after errors/cancellation are reclaimed; ordinary user documents cannot enter the move/delete path.
 - While the system is obtaining/copying a file, the picker remains responsible for that operation. The app can show checking/saving status only after its delegate receives the copies. System copying is not an app-controlled progress or resumable transfer.
@@ -39,7 +39,7 @@ xcodebuild -project LocalAIStudio.xcodeproj -scheme LocalAIStudio \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-The full simulator suite uses the fixtures prepared by [.github/workflows/ios.yml](.github/workflows/ios.yml). A separate `ImportFixtureHost` app exposes the source Documents folder; only simulator tests build/install it, and it is not included in the IPA. AI Studio uses the same document configuration in Debug and Release, with file sharing disabled in both. CI verifies that external source files are unchanged after import, cancellation and retry. The final IPA is checked for both the display name and bundle name.
+The full simulator suite uses the fixtures prepared by [.github/workflows/ios.yml](.github/workflows/ios.yml). A separate `ImportFixtureHost` app exposes the source Documents folder; only simulator tests build/install it, and it is not included in the IPA. AI Studio uses the same document configuration in Debug and Release, with file sharing disabled in both. CI verifies that external source files are unchanged after import, cancellation and retry. The final IPA is checked for its visible display name and internal product metadata.
 
 A new storage test adopts a **4 GB sparse test file** and checks that the inode survives the move, rather than allocating or copying 4 GB. This validates the storage path, not a provider transferring a real model. The Files UI fixture is a 1 MiB file containing only a 36-byte header and zero padding, not model weights. Actual build/test results belong in the PR and Actions run, not inferred from successful compilation.
 
