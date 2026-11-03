@@ -83,7 +83,7 @@ struct ChatPage: View {
                 }
             )
             .safeAreaInset(edge: .bottom) {
-                HStack(alignment: .bottom, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
                     TextField("发送消息…", text: $chat.draft, axis: .vertical)
                         .lineLimit(1...6)
                         .focused($messageFocused)
@@ -125,6 +125,7 @@ struct ChatPage: View {
                 .padding(.horizontal).padding(.bottom, 8)
             }
             .navigationTitle("AI")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("对话选项", systemImage: "ellipsis") {
