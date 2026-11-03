@@ -125,7 +125,7 @@ struct DevicePage: View {
                 .stroke(.secondary.opacity(0.22), style: StrokeStyle(lineWidth: 5, lineCap: .round))
             if let fraction {
                 Circle().trim(from: 0, to: fraction * 0.75)
-                    .stroke(.orange, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .stroke(ramColor(fraction), style: StrokeStyle(lineWidth: 10, lineCap: .round))
             }
         }
         .rotationEffect(.degrees(135))
@@ -142,6 +142,13 @@ struct DevicePage: View {
         .accessibilityLabel("整机 RAM 非缓存占用估算，不代表内存压力")
         .accessibilityValue(fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "无法读取")
         .accessibilityIdentifier("systemRAMGauge")
+    }
+
+    // Color is based on estimated usage, not the system's memory pressure level.
+    private func ramColor(_ fraction: Double) -> Color {
+        if fraction >= 0.9 { return .red }
+        if fraction >= 0.7 { return .orange }
+        return .green
     }
 
     private func storageCard(_ snapshot: DeviceSnapshot) -> some View {

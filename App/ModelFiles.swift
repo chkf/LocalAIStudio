@@ -61,9 +61,11 @@ actor ModelFiles {
 
     func discardPickerCopies(_ urls: [URL]) throws {
         for url in urls {
+            // Successfully imported copies have already moved out of this path.
+            guard files.fileExists(atPath: url.path) else { continue }
             try checkPickerCopy(url)
             do { try files.removeItem(at: url) }
-            catch CocoaError.fileNoSuchFile { continue } // Already moved into the library.
+            catch CocoaError.fileNoSuchFile { continue }
         }
     }
 

@@ -44,7 +44,8 @@ final class ModelLibrary {
             importTask = nil
         }
         let job = Task { [weak self] in
-            for url in urls {
+            var completed = 0
+            for (index, url) in urls.enumerated() {
                 do {
                     try Task.checkCancellation()
                     self?.importingName = url.lastPathComponent
@@ -52,6 +53,7 @@ final class ModelLibrary {
                     if copies { model = try await files.importPickerCopy(from: url) }
                     else { model = try await files.importFile(from: url) }
                     self?.models.insert(model, at: 0)
+                    completed = index + 1
                 } catch is CancellationError {
                     break
                 } catch {
@@ -59,9 +61,9 @@ final class ModelLibrary {
                     break
                 }
             }
-            // On failure/cancellation, also release copies not yet processed in the batch.
-            if copies {
-                do { try await files.discardPickerCopies(urls) }
+            // Reclaim only unprocessed copies. Successful imports have already moved.
+            if copies && completed < urls.count {
+                do { try await files.discardPickerCopies(Array(urls.dropFirst(completed))) }
                 catch {
                     let previous = self?.errorMessage.map { "\($0)\n" } ?? ""
                     self?.errorMessage = previous + "清理导入副本失败：\(error.localizedDescription)"

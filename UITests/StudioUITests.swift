@@ -2,6 +2,20 @@ import XCTest
 
 final class StudioUITests: XCTestCase {
     @MainActor
+    func testChatKeyboardHasAnExplicitDismissAction() {
+        let app = XCUIApplication()
+        app.launch()
+        let input = app.descendants(matching: .any)["chatInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 15))
+        input.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        let done = app.buttons["dismissChatKeyboard"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5), app.debugDescription)
+        done.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+    }
+
+    @MainActor
     func testNavigationAndUnsupportedGeneration() throws {
         let app = XCUIApplication()
         app.launch()

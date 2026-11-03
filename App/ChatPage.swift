@@ -11,6 +11,7 @@ struct ChatPage: View {
     @State private var confirmingLoad = false
     @State private var confirmingClear = false
     @State private var sendTask: Task<Void, Never>?
+    @FocusState private var messageFocused: Bool
     let openModels: () -> Void
 
     private var selectedModel: LocalModel? {
@@ -54,6 +55,7 @@ struct ChatPage: View {
                             .padding()
                         }
                         .defaultScrollAnchor(.bottom)
+                        .scrollDismissesKeyboard(.interactively)
                         .onChange(of: chat.messages.last?.text) { _, _ in scroll.scrollTo("end", anchor: .bottom) }
                     }
                 }
@@ -67,6 +69,7 @@ struct ChatPage: View {
                 HStack(alignment: .bottom, spacing: 12) {
                     TextField("发送消息…", text: $chat.draft, axis: .vertical)
                         .lineLimit(1...6)
+                        .focused($messageFocused)
                         .accessibilityIdentifier("chatInput")
                     if busy {
                         Button("停止", systemImage: "stop.fill") { stop() }
@@ -97,6 +100,11 @@ struct ChatPage: View {
                             .disabled(chat.loadedModelID == nil && !chat.isBusy)
                         Button("清空对话", systemImage: "trash", role: .destructive) { confirmingClear = true }
                     }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("完成") { messageFocused = false }
+                        .accessibilityIdentifier("dismissChatKeyboard")
                 }
             }
             .confirmationDialog("首次尝试这个模型", isPresented: $confirmingLoad, titleVisibility: .visible) {
@@ -155,6 +163,7 @@ struct ChatPage: View {
 
     private func send() {
         guard let model = selectedModel, !busy else { return }
+        messageFocused = false
         sendTask = Task {
             defer { sendTask = nil }
             do {

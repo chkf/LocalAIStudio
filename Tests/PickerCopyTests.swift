@@ -34,6 +34,23 @@ final class PickerCopyTests: XCTestCase {
         XCTAssertEqual(models, [model])
     }
 
+    func testCleanupAfterSuccessfulImportDoesNotReportAnErrorOrLeavePendingCopies() async throws {
+        let root = try workspace()
+        let imported = root.appendingPathComponent("imported.bin")
+        let pending = root.appendingPathComponent("pending.bin")
+        let content = Data(repeating: 0, count: 32)
+        try content.write(to: imported)
+        try content.write(to: pending)
+        let files = try ModelFiles(directory: root.appendingPathComponent("Models"))
+        let model = try await files.importPickerCopy(from: imported)
+        // The original temporary path is gone after the move. It must not fail cleanup.
+        try await files.discardPickerCopies([imported, pending])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: imported.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: pending.path))
+        let models = try await files.list()
+        XCTAssertEqual(models, [model])
+    }
+
     func testInvalidCopyDoesNotLeaveAStagingFileOrDeleteOriginal() async throws {
         let root = try workspace()
         let original = root.appendingPathComponent("original.txt")
