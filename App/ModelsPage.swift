@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ModelsPage: View {
     @Environment(ModelLibrary.self) private var library
+    @Environment(SpeechController.self) private var speech
     @Environment(ChatSession.self) private var chat
     @Environment(ImageGenerationSession.self) private var images
     @State private var importing = false
@@ -18,6 +19,7 @@ struct ModelsPage: View {
     var body: some View {
         NavigationStack {
             List {
+                Section { NavigationLink("语音模型") { SpeechModelsPage() } }
                 if !library.isReady {
                     Section {
                         Button("重新打开模型库") { Task { await library.open() } }
@@ -165,6 +167,7 @@ struct ModelsPage: View {
 
 private struct ModelDetail: View {
     @Environment(ModelLibrary.self) private var library
+    @Environment(SpeechController.self) private var speech
     @Environment(ChatSession.self) private var chat
     @Environment(ImageGenerationSession.self) private var images
     @State private var showingConversion = false
@@ -199,6 +202,7 @@ private struct ModelDetail: View {
                     Button("创建 8-bit 主模型") {
                         Task {
                             await library.process(model, operation: .quantize) {
+                                await speech.stopAndWait()
                                 await images.stop()
                                 await chat.unload()
                             }

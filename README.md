@@ -90,3 +90,13 @@ Verify a small file and the reported 3.66 GB `.litertlm` using the user's actual
 Follow [AGENTS.md](AGENTS.md). The [product plan](docs/PLAN.md) describes the full roadmap, not a promise that every module is implemented. [Inference notes](docs/INFERENCE.md) record backend limits; [icon notes](docs/icon-composer.md) describe the compiled icon.
 
 LiteRT-LM is pinned to official v0.18.1 and uses Apache-2.0; see [third-party notices](App/THIRD_PARTY_NOTICES.txt). Users obtain model weights under their own licenses. Sign the IPA locally; do not upload certificates, provisioning profiles, passwords or private keys. A third-party certificate does not guarantee restricted background entitlements.
+
+
+### 本地语音朗读
+
+在「模型 → 语音模型」或「对话设置 → 语音模型与朗读」中，下载 Kokoro v1.0 INT8 中英文模型（约 151 MB），或导入自己下载并解压的 sherpa-onnx Kokoro v1.0 文件夹。
+支持文件：`model.int8.onnx` 或 `model.onnx`、`voices.bin`、`tokens.txt`、`lexicon-us-en.txt`、`lexicon-zh.txt`；可选中文数字／日期／电话 FST 和 LICENSE 会一并复制。原始 PyTorch／MLX 权重、单独的 ONNX 文件、其他 TTS 架构不兼容。
+
+添加后选择模型、音色编号与语速，可试听，也用于消息菜单的「朗读」与「自动朗读回复」。系统语音仍是默认选项。Kokoro 合成前释放聊天模型，逐段生成并播放，结束或取消后释放 TTS 引擎；后台／内存警告会停止朗读。再次聊天会重新加载聊天模型。此版本不包含声音克隆。
+
+引擎固定为 sherpa-onnx v2.0.1，CPU 推理；内置下载固定上游模型快照，校验全部下载文件 SHA-256，取消或失败清理 staging。模型权重不随应用分发，使用须遵守模型来源页面及包内许可证。

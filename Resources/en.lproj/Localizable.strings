@@ -163,3 +163,26 @@
 "清理生图配套资源" = "Clear Image Model Resources";
 "模型默认" = "Model Default";
 "导入支持的 Checkpoint，或在模型详情中转换 Safetensors。" = "Import a supported checkpoint, or convert Safetensors in model details.";
+
+// Local speech models
+"语音" = "Speech";
+"语音模型" = "Speech models";
+"朗读方式" = "Speech output";
+"iOS 系统语音" = "iOS system voice";
+"音色" = "Voice";
+"音色 %lld" = "Voice %lld";
+"语速" = "Speed";
+"试听文本" = "Preview text";
+"试听" = "Preview";
+"正在朗读…" = "Reading aloud…";
+"添加语音模型" = "Add a speech model";
+"下载 Kokoro 中英文模型（约 151 MB）" = "Download Kokoro Chinese/English (about 151 MB)";
+"导入 Kokoro 模型文件夹" = "Import a Kokoro model folder";
+"取消下载或导入" = "Cancel download or import";
+"模型来源与许可" = "Model source and license";
+"已下载与导入" = "Downloaded and imported";
+"删除语音模型？" = "Delete speech model?";
+"语音模型与朗读" = "Speech models and playback";
+"语音输入使用设备端识别；朗读可选择系统声音或导入的 Kokoro 模型。" = "Speech input uses on-device recognition. Playback can use system voices or imported Kokoro models.";
+"音色编号沿用模型音色表；官方多语言包的中文音色从 45 开始。" = "Voice IDs follow the model voice table. Chinese voices in the official multilingual pack start at 45.";
+"下载后可离线使用。支持 sherpa-onnx 格式的 Kokoro v1.0 模型包，需包含 ONNX 权重、voices.bin、tokens.txt 和中英文词典；不支持直接导入任意 TTS 权重。" = "Works offline after downloading. Supports sherpa-onnx Kokoro v1.0 packages containing ONNX weights, voices.bin, tokens.txt and Chinese/English lexicons. Other TTS weights are not supported.";

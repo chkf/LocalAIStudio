@@ -64,7 +64,8 @@ struct ChatSettingsPage: View {
                             Text(voice.name).tag(voice.identifier)
                         }
                     }
-                    Text("使用 iOS 原生语音合成与设备端识别，不包含 Kokoro 或 Parakeet 权重。")
+                    NavigationLink("语音模型与朗读") { SpeechModelsPage() }
+                    Text("语音输入使用设备端识别；朗读可选择系统声音或导入的 Kokoro 模型。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section {

@@ -17,6 +17,9 @@ settings:
     MARKETING_VERSION: "0.5.0"
 
 packages:
+  SherpaOnnx:
+    url: https://github.com/k2-fsa/sherpa-onnx.git
+    revision: af2d8d81dbfa61c4cea4c568da78f3982edca005
   LiteRTLM:
     url: https://github.com/google-ai-edge/LiteRT-LM.git
     # Official v0.18.1 release: keep Swift wrappers and XCFramework on the same release.
@@ -53,6 +56,8 @@ targets:
         type: file
         buildPhase: resources
     dependencies:
+      - package: SherpaOnnx
+        product: sherpa-onnx
       - package: LiteRTLM
         product: LiteRTLM
       - package: LlamaSwift

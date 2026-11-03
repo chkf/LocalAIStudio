@@ -3,6 +3,7 @@ import UIKit
 
 struct GeneratePage: View {
     @Environment(ModelLibrary.self) private var library
+    @Environment(SpeechController.self) private var speech
     @Environment(ChatSession.self) private var chat
     @Environment(ImageGenerationSession.self) private var generator
     @AppStorage("imageModelID") private var selectedID = ""
@@ -83,6 +84,7 @@ struct GeneratePage: View {
                             } else if let selectedModel {
                                 Task {
                                     guard !library.isProcessing else { return }
+                                    await speech.stopAndWait()
                                     await chat.unload()
                                     guard !library.isProcessing else { return }
                                     do {

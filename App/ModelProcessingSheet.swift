@@ -3,6 +3,7 @@ import SwiftUI
 struct ModelProcessingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ModelLibrary.self) private var library
+    @Environment(SpeechController.self) private var speech
     @Environment(ChatSession.self) private var chat
     @Environment(ImageGenerationSession.self) private var images
     let model: LocalModel
@@ -67,6 +68,7 @@ struct ModelProcessingSheet: View {
                             let operation: ImageModelOperation = isLoRA ? .lora(version: version.isEmpty ? nil : version) : .convert(template: template, vae: vae)
                             Task {
                                 await library.process(model, operation: operation) {
+                                    await speech.stopAndWait()
                                     await images.stop()
                                     await chat.unload()
                                 }

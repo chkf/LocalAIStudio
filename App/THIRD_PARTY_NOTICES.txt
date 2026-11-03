@@ -1,3 +1,10 @@
+sherpa-onnx v2.0.1 (https://github.com/k2-fsa/sherpa-onnx)
+Copyright (c) 2023 Xiaomi Corporation. Apache License 2.0 (text below).
+ONNX Runtime (https://github.com/microsoft/onnxruntime)
+Copyright (c) Microsoft Corporation. MIT License (text below).
+Kokoro model weights are downloaded separately from csukuangfj/kokoro-int8-multi-lang-v1_0.
+The downloaded model LICENSE is retained with each built-in model package.
+
 MLX Swift LM v3.32.3 (https://github.com/ml-explore/mlx-swift-lm)
 MLX Swift (https://github.com/ml-explore/mlx-swift)
 Licensed under MIT. Model architectures and weights retain their own licenses.

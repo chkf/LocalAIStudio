@@ -13,7 +13,7 @@ struct ChatPage: View {
     @State private var confirmingClear = false
     @State private var sendTask: Task<Void, Never>?
     @State private var showingChatSettings = false
-    @State private var speech = SpeechController()
+    @Environment(SpeechController.self) private var speech
     @FocusState private var messageFocused: Bool
     let openModels: () -> Void
 
@@ -50,8 +50,7 @@ struct ChatPage: View {
                                             .contextMenu {
                                                 if message.role == .assistant {
                                                     Button("朗读", systemImage: "speaker.wave.2") {
-                                                        speech.speak(message.text, language: chat.preferences.speechLanguage,
-                                                                     voiceIdentifier: chat.preferences.voiceIdentifier)
+                                                        speak(message.text)
                                                     }
                                                     Button("停止朗读", systemImage: "speaker.slash") { speech.stopSpeaking() }
                                                 }
@@ -83,35 +82,45 @@ struct ChatPage: View {
                 }
             )
             .safeAreaInset(edge: .bottom) {
-                HStack(alignment: .center, spacing: 12) {
-                    TextField("发送消息…", text: $chat.draft, axis: .vertical)
-                        .lineLimit(1...6)
-                        .focused($messageFocused)
-                        .accessibilityIdentifier("chatInput")
-                    Button(speech.isRecording ? "结束语音输入" : "语音输入", systemImage: speech.isRecording ? "stop.circle.fill" : "mic") {
-                        if speech.isRecording { speech.stopTranscription() }
-                        else {
-                            messageFocused = false
-                            let existing = chat.draft
-                            Task {
-                                await speech.startTranscription(language: chat.preferences.speechLanguage) { result in
-                                    chat.draft = existing.isEmpty ? result : existing + " " + result
+                VStack(spacing: 8) {
+                    if speech.isSynthesizing {
+                        HStack {
+                            ProgressView()
+                            Text("正在朗读…").font(.caption)
+                            Spacer()
+                            Button("停止朗读") { speech.stopSpeaking() }
+                        }
+                    }
+                    HStack(alignment: .center, spacing: 12) {
+                        TextField("发送消息…", text: $chat.draft, axis: .vertical)
+                            .lineLimit(1...6)
+                            .focused($messageFocused)
+                            .accessibilityIdentifier("chatInput")
+                        Button(speech.isRecording ? "结束语音输入" : "语音输入", systemImage: speech.isRecording ? "stop.circle.fill" : "mic") {
+                            if speech.isRecording { speech.stopTranscription() }
+                            else {
+                                messageFocused = false
+                                let existing = chat.draft
+                                Task {
+                                    await speech.startTranscription(language: chat.preferences.speechLanguage) { result in
+                                        chat.draft = existing.isEmpty ? result : existing + " " + result
+                                    }
                                 }
                             }
                         }
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("chatMicrophone")
-                    if busy {
-                        Button("停止", systemImage: "stop.fill") { stop() }
-                            .labelStyle(.iconOnly).buttonStyle(.bordered)
-                            .accessibilityIdentifier("stopGeneration")
-                    } else {
-                        Button("发送", systemImage: "arrow.up") { attemptSend() }
-                            .labelStyle(.iconOnly).buttonStyle(.borderedProminent)
-                            .disabled(selectedModel == nil || chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            .accessibilityIdentifier("sendMessage")
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("chatMicrophone")
+                        if busy {
+                            Button("停止", systemImage: "stop.fill") { stop() }
+                                .labelStyle(.iconOnly).buttonStyle(.bordered)
+                                .accessibilityIdentifier("stopGeneration")
+                        } else {
+                            Button("发送", systemImage: "arrow.up") { attemptSend() }
+                                .labelStyle(.iconOnly).buttonStyle(.borderedProminent)
+                                .disabled(selectedModel == nil || chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                .accessibilityIdentifier("sendMessage")
+                        }
                     }
                 }
                 .padding(14)
@@ -146,7 +155,7 @@ struct ChatPage: View {
                 Button("清空对话", role: .destructive) { Task { await chat.clear() } }
             }
             .sheet(isPresented: $showingChatSettings) { ChatSettingsPage() }
-            .alert("语音输入", isPresented: Binding(
+            .alert("语音", isPresented: Binding(
                 get: { speech.errorMessage != nil },
                 set: { if !$0 { speech.errorMessage = nil } }
             )) {
@@ -157,8 +166,7 @@ struct ChatPage: View {
             .onChange(of: chat.status) { _, status in
                 if status == "生成完成", chat.preferences.autoSpeak,
                    let last = chat.messages.last, last.role == .assistant, !last.isInterrupted {
-                    speech.speak(last.text, language: chat.preferences.speechLanguage,
-                                 voiceIdentifier: chat.preferences.voiceIdentifier)
+                    speak(last.text)
                 }
             }
             .onDisappear {
@@ -220,6 +228,7 @@ struct ChatPage: View {
                 try Task.checkCancellation()
                 guard UIApplication.shared.applicationState == .active else { return }
                 guard !library.isProcessing else { return }
+                await speech.stopAndWait()
                 await images.stop()
                 guard !library.isProcessing else { return }
                 await chat.send(model: model, fileURL: try library.fileURL(for: model))
@@ -227,6 +236,16 @@ struct ChatPage: View {
                 return
             }
             catch { chat.errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func speak(_ text: String) {
+        guard scenePhase == .active, !chat.isBusy, !images.isGenerating, !library.isProcessing else { return }
+        speech.speak(text, language: chat.preferences.speechLanguage,
+                     voiceIdentifier: chat.preferences.voiceIdentifier) {
+            guard !chat.isBusy, !images.isGenerating, !library.isProcessing else { return false }
+            await chat.unload()
+            return !images.isGenerating && !library.isProcessing && scenePhase == .active
         }
     }
 
