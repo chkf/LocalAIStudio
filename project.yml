@@ -41,7 +41,6 @@ targets:
         # Preserve bundle identity and the existing app/model container on upgrade.
         PRODUCT_BUNDLE_IDENTIFIER: dev.example.localaistudio
         INFOPLIST_KEY_CFBundleDisplayName: AI Studio
-        INFOPLIST_KEY_CFBundleName: AI Studio
         INFOPLIST_FILE: App/Info.plist
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         # Retained for document interoperability; the import picker now requests copies.
