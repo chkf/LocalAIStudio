@@ -66,6 +66,9 @@ jobs:
               assert ipa.getinfo(app + 'en.lproj/Localizable.strings').file_size > 0, 'Missing English app localization'
               assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
               assert ipa.getinfo(app + 'Frameworks/CLiteRTLM.framework/CLiteRTLM').file_size > 0
+              assert ipa.getinfo(app + 'Frameworks/MLXBackend.framework/MLXBackend').file_size > 0
+              assert any(name.startswith(app) and 'mlx-swift_Cmlx.bundle/' in name
+                         and name.endswith('/default.metallib') for name in ipa.namelist()), 'Missing MLX Metal shaders'
               primary_icon = info.get('CFBundleIcons', {}).get('CFBundlePrimaryIcon', {})
               assert primary_icon.get('CFBundleIconName') == 'AppIcon', 'Missing AppIcon registration'
               assert ipa.getinfo(app + 'Assets.car').file_size > 0

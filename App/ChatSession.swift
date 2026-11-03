@@ -1,5 +1,6 @@
 import Foundation
 import LiteRTLM
+import MLXBackend
 import Observation
 import os
 
@@ -311,7 +312,8 @@ private actor TextRuntime {
             guard options.backend != "cpu" else { throw ChatError.unsupportedMLXCPU }
             guard !options.enableSpeculativeDecoding else { throw ChatError.unsupportedSpeculativeDecoding }
             guard !options.enableThinking else { throw ChatError.unsupportedMLXThinking }
-            let elapsed = try await mlx.load(directory: fileURL, options: options)
+            let elapsed = try await mlx.load(directory: fileURL, systemPrompt: options.systemPrompt,
+                temperature: Float(options.temperature), topP: Float(options.topP), topK: options.topK)
             currentFormat = .mlxBundle
             backendName = "MLX Metal"
             return elapsed
@@ -357,7 +359,9 @@ private actor TextRuntime {
             return await gguf.stream(prompt: prompt, history: history, maxOutputTokens: maxOutputTokens)
         }
         if currentFormat == .mlxBundle {
-            return await mlx.stream(prompt: prompt, history: history, maxOutputTokens: maxOutputTokens)
+            let messages = history.filter { !$0.isInterrupted && !$0.text.isEmpty }
+                .map { (isUser: $0.role == .user, text: $0.text) }
+            return await mlx.stream(prompt: prompt, history: messages, maxOutputTokens: maxOutputTokens)
         }
         let conversation = conversation!
         return AsyncThrowingStream { continuation in
