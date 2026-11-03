@@ -64,7 +64,7 @@ private struct MainView: View {
             }
             Tab("模型", systemImage: "square.stack.3d.up", value: Page.models) {
                 ModelsPage { model in
-                    if model.format.supportsImageGeneration {
+                    if model.supportsImageGeneration {
                         selectedImageModelID = model.id.uuidString
                         selection = .generate
                     } else {
@@ -88,6 +88,7 @@ private struct MainView: View {
             else { monitor.stop() }
             if phase == .background {
                 library.cancelImport()
+                library.cancelProcessing()
                 generator.cancel()
                 chat.saveDraft()
                 chat.cancel()
@@ -99,6 +100,7 @@ private struct MainView: View {
         }
         .onDisappear { monitor.stop() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            library.cancelProcessing()
             generator.cancel()
             chat.cancel()
             Task { await chat.unload() }

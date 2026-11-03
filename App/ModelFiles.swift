@@ -36,7 +36,10 @@ actor ModelFiles {
                 guard model.id == id, values.isSymbolicLink != true else {
                     throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
                 }
-                if model.format == .mlxBundle {
+                if model.format == .drawThingsBundle {
+                    guard values.isDirectory == true else { throw ModelFileError.invalidLibraryEntry(model.name) }
+                    _ = try ImageModelBundle.read(file)
+                } else if model.format == .mlxBundle {
                     guard values.isDirectory == true, try inspectMLXFolder(file).size == model.byteCount else {
                         throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
                     }
@@ -80,8 +83,9 @@ actor ModelFiles {
             try files.moveItem(at: source, to: staging.appendingPathComponent("model.mlx", isDirectory: true))
             let model = LocalModel(id: id, name: source.lastPathComponent, byteCount: inspection.size,
                                    importedAt: .now, format: .mlxBundle, architecture: inspection.architecture,
-                                   quantization: nil, adapter: nil,
-                                   validationNote: "已保存完整 MLX 模型目录；权重与架构兼容性需实际加载验证。")
+                                   quantization: inspection.quantization, adapter: nil,
+                                   validationNote: "已保存完整 MLX 模型目录；权重与架构兼容性需实际加载验证。",
+                                   kind: .text, architectureSource: "config.json 的 model_type")
             try JSONEncoder().encode(model).write(
                 to: staging.appendingPathComponent("metadata.json"), options: .atomic)
             try Task.checkCancellation()
@@ -95,7 +99,7 @@ actor ModelFiles {
         }
     }
 
-    private func inspectMLXFolder(_ folder: URL) throws -> (size: Int64, architecture: String) {
+    private func inspectMLXFolder(_ folder: URL) throws -> (size: Int64, architecture: String, quantization: String?) {
         let config = folder.appendingPathComponent("config.json")
         let metadata = try config.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .isSymbolicLinkKey])
         guard metadata.isRegularFile == true, metadata.isSymbolicLink != true,
@@ -132,7 +136,11 @@ actor ModelFiles {
         guard weights else {
             throw ModelFileError.invalid("目录缺少 Safetensors 模型权重。")
         }
-        return (total, architecture)
+        let quant = (object["quantization"] ?? object["quantization_config"]) as? [String: Any]
+        let bits = quant?["bits"] as? Int
+        let method = quant?["quant_method"] as? String
+        let quantization = bits.map { "\($0)-bit" } ?? method
+        return (total, architecture, quantization)
     }
 
     func discardPickerCopies(_ urls: [URL]) throws {
@@ -200,7 +208,8 @@ actor ModelFiles {
             let model = LocalModel(
                 id: id, name: displayName, byteCount: Int64(size), importedAt: .now,
                 format: inspection.format, architecture: inspection.architecture,
-                quantization: inspection.quantization, adapter: inspection.adapter, validationNote: inspection.note
+                quantization: inspection.quantization, adapter: inspection.adapter, validationNote: inspection.note,
+                kind: inspection.kind, architectureSource: inspection.architectureSource
             )
             let destination = staging.appendingPathComponent("model.\(model.format.fileExtension)")
             try files.moveItem(at: stagedFile, to: destination)
@@ -222,6 +231,66 @@ actor ModelFiles {
 
     func delete(_ model: LocalModel) throws {
         try files.removeItem(at: directory.appendingPathComponent(model.id.uuidString, isDirectory: true))
+    }
+
+    func reinspect(_ model: LocalModel) throws -> LocalModel {
+        let url = fileURL(for: model)
+        var result = model
+        if model.format == .mlxBundle {
+            let inspection = try inspectMLXFolder(url)
+            result = LocalModel(id: model.id, name: model.name, byteCount: model.byteCount,
+                importedAt: model.importedAt, format: model.format, architecture: inspection.architecture,
+                quantization: inspection.quantization, adapter: nil, validationNote: model.validationNote,
+                kind: .text, architectureSource: "config.json 的 model_type")
+        } else if model.format != .drawThingsBundle {
+            let inspection = try ModelFile.inspect(url, name: model.name)
+            result = LocalModel(id: model.id, name: model.name, byteCount: model.byteCount,
+                importedAt: model.importedAt, format: inspection.format, architecture: inspection.architecture,
+                quantization: inspection.quantization, adapter: inspection.adapter, validationNote: inspection.note,
+                kind: inspection.kind, architectureSource: inspection.architectureSource)
+        }
+        try JSONEncoder().encode(result).write(to: url.deletingLastPathComponent().appendingPathComponent("metadata.json"), options: .atomic)
+        return result
+    }
+
+    func process(_ model: LocalModel, operation: ImageModelOperation,
+                 progress: @escaping @Sendable (Double) -> Void) throws -> LocalModel {
+        let id = UUID()
+        let staging = directory.appendingPathComponent(".import-\(id.uuidString)", isDirectory: true)
+        let bundleDirectory = staging.appendingPathComponent("model.drawthings", isDirectory: true)
+        try files.createDirectory(at: bundleDirectory, withIntermediateDirectories: true)
+        do {
+            let bundle = try ImageModelTools.process(source: fileURL(for: model), name: model.name,
+                operation: operation, destination: bundleDirectory, progress: progress)
+            try bundle.write(bundleDirectory)
+            let contents = try files.contentsOfDirectory(at: bundleDirectory, includingPropertiesForKeys: [.fileSizeKey])
+            var total: Int64 = 0
+            for url in contents {
+                let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true, let size = values.fileSize, size > 0 else {
+                    throw ModelFileError.invalid("转换产物缺失或无效。")
+                }
+                total += Int64(size)
+            }
+            guard files.fileExists(atPath: bundleDirectory.appendingPathComponent(bundle.file).path) else {
+                throw ModelFileError.invalid("转换产物缺少主权重。")
+            }
+            let suffix = bundle.quantization.hasPrefix("8-bit") ? " · 8-bit" : " · 已转换"
+            let result = LocalModel(id: id, name: model.name + suffix, byteCount: total,
+                importedAt: .now, format: .drawThingsBundle, architecture: bundle.version,
+                quantization: bundle.quantization, adapter: bundle.lora == nil ? nil : "LoRA",
+                validationNote: "已完成转换；实际生成效果与设备内存需求仍需验证。",
+                kind: bundle.lora == nil ? .image : .lora, architectureSource: "转换器确认")
+            try JSONEncoder().encode(result).write(to: staging.appendingPathComponent("metadata.json"), options: .atomic)
+            try Task.checkCancellation()
+            try files.moveItem(at: staging, to: directory.appendingPathComponent(id.uuidString))
+            return result
+        } catch {
+            let failure = error
+            do { try files.removeItem(at: staging) }
+            catch { throw ModelFileError.cleanupFailed("\(failure.localizedDescription)；\(error.localizedDescription)") }
+            throw failure
+        }
     }
 
     private func copyFile(from source: URL, to destination: URL) throws {

@@ -3,6 +3,7 @@ import SwiftUI
 struct ModelsPage: View {
     @Environment(ModelLibrary.self) private var library
     @Environment(ChatSession.self) private var chat
+    @Environment(ImageGenerationSession.self) private var images
     @State private var importing = false
     @State private var importingFolders = false
     @State private var downloading = false
@@ -29,6 +30,13 @@ struct ModelsPage: View {
                     if let download = library.download, let transfer = download.transfer {
                         Section("下载") { TransferRow(download: download, transfer: transfer) }
                     }
+                    if library.isProcessing {
+                        Section("模型处理") {
+                            ProgressView(value: library.processingProgress)
+                            Text(library.processingStatus).font(.subheadline)
+                            Button("取消处理", role: .cancel) { library.cancelProcessing() }
+                        }
+                    }
                     if library.models.isEmpty {
                         Section {
                             ContentUnavailableView {
@@ -52,19 +60,20 @@ struct ModelsPage: View {
                         Section("模型文件") {
                             ForEach(filteredModels) { model in
                                 NavigationLink {
-                                    ModelDetail(model: model, selectModel: selectModel)
+                                    ModelDetail(original: model, selectModel: selectModel)
                                 } label: {
                                     VStack(alignment: .leading, spacing: 6) {
                                         Text(model.name).font(.headline).lineLimit(2)
                                         Text("\(model.format.rawValue) · \(bytes(model.byteCount))")
                                             .font(.subheadline).foregroundStyle(.secondary)
-                                        Text(model.adapter ?? model.architecture ?? "架构尚未确认")
+                                        Text(model.identitySummary)
                                             .font(.caption).foregroundStyle(.secondary)
                                     }
                                     .padding(.vertical, 4)
                                 }
                                 .swipeActions {
                                     Button("删除", role: .destructive) { pendingDelete = model }
+                                        .disabled(library.isWriting || images.isGenerating)
                                 }
                             }
                         }
@@ -100,11 +109,11 @@ struct ModelsPage: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("添加模型", systemImage: "plus") {
                         Button("从文件导入", systemImage: "folder") { importing = true }
+                            .disabled(library.isWriting)
+                            .accessibilityIdentifier("importModel")
                         Button("导入 MLX 模型文件夹", systemImage: "folder.badge.plus") { importingFolders = true }
                             .disabled(library.isWriting)
                             .accessibilityIdentifier("importMLXFolder")
-                            .disabled(library.isWriting)
-                            .accessibilityIdentifier("importModel")
                         Button("从 HTTPS 下载", systemImage: "arrow.down.circle") { downloading = true }
                             .disabled(library.download?.transfer != nil)
                     }
@@ -135,6 +144,7 @@ struct ModelsPage: View {
                             if chat.loadedModelID == model.id || (chat.isBusy && chat.lastModelID == model.id) {
                                 await chat.unload()
                             }
+                            await images.stop()
                             await library.delete(model)
                         }
                     }
@@ -147,7 +157,12 @@ struct ModelsPage: View {
 }
 
 private struct ModelDetail: View {
-    let model: LocalModel
+    @Environment(ModelLibrary.self) private var library
+    @Environment(ChatSession.self) private var chat
+    @Environment(ImageGenerationSession.self) private var images
+    @State private var showingConversion = false
+    let original: LocalModel
+    private var model: LocalModel { library.models.first { $0.id == original.id } ?? original }
     let selectModel: (LocalModel) -> Void
 
     var body: some View {
@@ -160,12 +175,44 @@ private struct ModelDetail: View {
             Section("识别结果") {
                 LabeledContent("格式", value: model.format.rawValue)
                 LabeledContent("架构", value: model.architecture ?? "尚未确认")
+                LabeledContent("类型", value: model.kind?.rawValue ?? "尚未确认")
+                if let source = model.architectureSource { Text(source).font(.caption).foregroundStyle(.secondary) }
+                Button("重新识别") { Task { await library.reinspect(model) } }
+                    .disabled(library.isWriting)
                 LabeledContent("量化", value: model.quantization ?? "尚未确认")
                 LabeledContent("适配器", value: model.adapter ?? "未识别")
                 Text(model.validationNote).font(.subheadline).foregroundStyle(.secondary)
             }
+            Section("模型处理") {
+                if model.format == .safetensors && model.kind != .text && model.kind != .vae && model.kind != .textEncoder && model.kind != .lokr {
+                    Button("转换为生图模型／LoRA") { showingConversion = true }
+                        .disabled(library.isWriting)
+                }
+                if model.format == .drawThingsBundle && model.kind == .image && model.quantization == "FP16" {
+                    Button("创建 8-bit 主模型") {
+                        Task {
+                            await library.process(model, operation: .quantize) {
+                                await images.stop()
+                                await chat.unload()
+                            }
+                        }
+                    }
+                    .disabled(library.isWriting)
+                    Text("只量化主模型矩阵，VAE／文本编码器保留原精度；另存副本，原模型保留。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if library.isProcessing {
+                    ProgressView(value: library.processingProgress)
+                    Text(library.processingStatus)
+                    Button("取消处理") { library.cancelProcessing() }
+                }
+            }
             Section {
                 Text(model.compatibilityDescription)
+                if model.supportsImageGeneration {
+                    Button("用于生图", systemImage: "photo") { selectModel(model) }
+                        .disabled(library.isProcessing)
+                }
                 if model.format.supportsTextGeneration {
                     Button("用于 AI 对话", systemImage: "bubble.left.and.bubble.right") { selectModel(model) }
                 }
@@ -175,6 +222,7 @@ private struct ModelDetail: View {
                 Text("文件头识别不等于完整性或运行验证。模型架构、量化与适配器必须由对应引擎实际加载确认。")
             }
         }
+        .sheet(isPresented: $showingConversion) { ModelProcessingSheet(model: model) }
         .navigationTitle("模型详情")
         .navigationBarTitleDisplayMode(.inline)
         .textSelection(.enabled)

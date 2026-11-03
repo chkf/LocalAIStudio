@@ -1,3 +1,7 @@
+# 0.5.0 model processing update
+
+Model metadata detection, image Safetensors conversion, local LoRA conversion/application and Q8P main-weight quantization are now wired into the app. See the 0.5.0 section in README for exact profiles, cancellation behavior and validation limits. The historical notes below describe earlier milestones, not the latest completion state.
+
 # 推理接入与验证边界
 
 核实日期：2026-11-02。这里区分**上游提供的能力**、**本项目已接线的代码**和**真机验证**。

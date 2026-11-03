@@ -5,6 +5,9 @@ import Observation
 final class ModelLibrary {
     private(set) var models: [LocalModel] = []
     private(set) var isImporting = false
+    private(set) var isProcessing = false
+    private(set) var processingStatus = ""
+    private(set) var processingProgress = 0.0
     private(set) var importingName: String?
     private(set) var isReady = false
     private(set) var download: ModelDownload?
@@ -12,9 +15,11 @@ final class ModelLibrary {
     @ObservationIgnored private var files: ModelFiles?
     @ObservationIgnored private var isOpening = false
     @ObservationIgnored private var importTask: Task<Void, Never>?
+    @ObservationIgnored private var processingCancelled = false
+    @ObservationIgnored private var processingTask: Task<LocalModel, Error>?
 
     var totalBytes: Int64 { models.reduce(0) { $0 + $1.byteCount } }
-    var isWriting: Bool { isImporting || download?.transfer?.phase == .importing }
+    var isWriting: Bool { isImporting || isProcessing || download?.transfer?.phase == .importing }
 
     func open() async {
         guard !isReady, !isOpening else { return }
@@ -80,6 +85,45 @@ final class ModelLibrary {
 
     func cancelImport() {
         importTask?.cancel()
+    }
+
+    func reinspect(_ model: LocalModel) async {
+        guard let files, !isWriting else { return }
+        do {
+            let result = try await files.reinspect(model)
+            if let index = models.firstIndex(where: { $0.id == result.id }) { models[index] = result }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func process(_ model: LocalModel, operation: ImageModelOperation,
+                 prepare: @MainActor () async -> Void) async {
+        guard let files, !isWriting else { return }
+        isProcessing = true
+        processingCancelled = false
+        processingStatus = "正在准备模型处理…"
+        processingProgress = 0
+        defer { isProcessing = false; processingTask = nil }
+        await prepare()
+        guard !Task.isCancelled, !processingCancelled else { return }
+        processingStatus = "正在处理 \(model.name)"
+        let job = Task {
+            try await files.process(model, operation: operation) { [weak self] fraction in
+                Task { @MainActor in self?.processingProgress = min(1, max(0, fraction)) }
+            }
+        }
+        processingTask = job
+        do {
+            let result = try await withTaskCancellationHandler { try await job.value } onCancel: { job.cancel() }
+            models.insert(result, at: 0)
+        } catch is CancellationError {
+            processingStatus = "已取消"
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func cancelProcessing() {
+        processingCancelled = true
+        processingTask?.cancel()
+        if isProcessing { processingStatus = "取消中，等待当前转换步骤结束…" }
     }
 
     func delete(_ model: LocalModel) async {

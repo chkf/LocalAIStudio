@@ -23,6 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Run portable model identification tests
+        run: swift test --package-path Validation
+
       - name: Generate Xcode project
         run: |
           xcodebuild -version
@@ -32,7 +35,7 @@ jobs:
       - name: Build iPhone app without signing
         run: |
           set -o pipefail
-          xcodebuild \
+          xcodebuild -skipMacroValidation \
             -project LocalAIStudio.xcodeproj \
             -scheme LocalAIStudio \
             -configuration Release \
@@ -110,7 +113,17 @@ jobs:
         id: simulator
         run: |
           python3 - <<'PY'
-          import json, os, subprocess
+          import json, os, subprocess, pathlib, plistlib
+          llama_plists = list(pathlib.Path('DerivedData/SourcePackages/artifacts').rglob('llama.xcframework/Info.plist'))
+          if not llama_plists:
+              raise SystemExit('Cannot locate llama XCFramework platform manifest')
+          supported = all(any(x.get('SupportedPlatformVariant') == 'simulator'
+                              for x in plistlib.loads(p.read_bytes()).get('AvailableLibraries', [])) for p in llama_plists)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"supported={str(supported).lower()}\n")
+          if not supported:
+              print('::notice::Pinned llama.cpp XCFramework has no simulator slice; device build and host logic tests run, simulator inference/UI tests are unavailable.')
+              raise SystemExit(0)
           devices = json.loads(subprocess.check_output([
               'xcrun', 'simctl', 'list', 'devices', 'available', '--json'
           ]))['devices']
@@ -126,10 +139,10 @@ jobs:
           PY
 
       - name: Build simulator test targets
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && steps.simulator.outputs.supported == 'true' }}
         run: |
           set -o pipefail
-          xcodebuild \
+          xcodebuild -skipMacroValidation \
             -project LocalAIStudio.xcodeproj \
             -scheme LocalAIStudio \
             -configuration Debug \
@@ -141,7 +154,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build-for-testing 2>&1 | tee test-build.log
           # A separate app exposes the source documents; never bundled into the IPA.
-          xcodebuild \
+          xcodebuild -skipMacroValidation \
             -project LocalAIStudio.xcodeproj \
             -scheme ImportFixtureHost \
             -configuration Debug \
@@ -152,7 +165,7 @@ jobs:
             build 2>&1 | tee fixture-build.log
 
       - name: Prepare external Files picker fixtures
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && steps.simulator.outputs.supported == 'true' }}
         id: fixtures
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
@@ -185,10 +198,10 @@ jobs:
           xcrun simctl launch "$SIMULATOR_ID" dev.example.localaistudio.importfixtures
 
       - name: Run unit and UI tests
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && steps.simulator.outputs.supported == 'true' }}
         run: |
           set -o pipefail
-          xcodebuild \
+          xcodebuild -skipMacroValidation \
             -project LocalAIStudio.xcodeproj \
             -scheme LocalAIStudio \
             -configuration Debug \

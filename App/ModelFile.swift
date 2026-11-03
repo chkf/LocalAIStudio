@@ -8,10 +8,10 @@ enum ModelFormat: String, Codable, Sendable, CaseIterable {
     case safetensors = "Safetensors"
     case mlxBundle = "MLX model folder"
     case checkpoint = "Checkpoint"
+    case drawThingsBundle = "Draw Things model"
     case binary = "Binary"
 
     var supportsTextGeneration: Bool { self == .litertLM || self == .gguf || self == .mlxBundle }
-    var supportsImageGeneration: Bool { self == .checkpoint }
 
     var fileExtension: String {
         switch self {
@@ -22,6 +22,7 @@ enum ModelFormat: String, Codable, Sendable, CaseIterable {
         case .safetensors: "safetensors"
         case .mlxBundle: "mlx"
         case .checkpoint: "ckpt"
+        case .drawThingsBundle: "drawthings"
         case .binary: "bin"
         }
     }
@@ -37,6 +38,17 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
     let quantization: String?
     let adapter: String?
     let validationNote: String
+    var kind: ModelKind? = nil
+    var architectureSource: String? = nil
+
+    var supportsImageGeneration: Bool {
+        (format == .checkpoint || format == .drawThingsBundle) && kind != .lora && kind != .lokr
+    }
+
+    var identitySummary: String {
+        let values = [kind?.rawValue, architecture].compactMap { $0 }
+        return values.isEmpty ? "架构尚未确认" : values.joined(separator: " · ")
+    }
 
     var compatibilityDescription: String {
         if format == .litertLM {
@@ -47,6 +59,9 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
         }
         if format == .mlxBundle {
             return "可尝试用 MLX Swift LM 加载本地模型目录；需完整的 config、tokenizer 与 Safetensors 权重，模型架构须受 MLX 支持。"
+        }
+        if format == .drawThingsBundle {
+            return kind == .lora ? "已转换的 LoRA；在匹配架构的生图模型下选择并设置强度。" : "已转换的生图模型；配套资源将在加载时检查，运行能力仍需真机验证。"
         }
         if format == .checkpoint {
             return "可尝试通过 MediaGenerationKit 使用支持的生图 Checkpoint；仅凭 .ckpt 扩展名不代表模型兼容。"
@@ -64,6 +79,8 @@ struct ModelInspection: Sendable {
     var quantization: String?
     var adapter: String?
     var note: String
+    var kind: ModelKind? = nil
+    var architectureSource: String? = nil
 }
 
 enum ModelFileError: LocalizedError {
@@ -219,12 +236,17 @@ enum ModelFile {
         } else {
             adapter = nil
         }
+        let identity = ModelIdentity.identify(metadata: metadata, tensors: entries.compactMapValues {
+            if case .tensor(let tensor) = $0 { return tensor.shape }
+            return nil
+        })
         return ModelInspection(
             format: .safetensors,
-            architecture: metadata["modelspec.architecture"] ?? metadata["ss_base_model_version"] ?? metadata["architecture"],
+            architecture: identity.architecture,
             quantization: metadata["quantization"] ?? dtypes.sorted().joined(separator: " / ") + "（张量类型）",
             adapter: adapter,
-            note: "已检查元数据和张量文件范围；未验证权重数值、模型完整依赖或推理兼容性。"
+            note: "已检查元数据和张量文件范围；未验证权重数值、模型完整依赖或推理兼容性。",
+            kind: identity.kind, architectureSource: identity.source
         )
     }
 
@@ -248,7 +270,10 @@ enum ModelFile {
                 }
                 let value = try reader.value(type: type, retain: ["general.architecture", "general.file_type", "general.alignment", "adapter.type"].contains(key))
                 switch key {
-                case "general.architecture": result.architecture = value
+                case "general.architecture":
+                    result.architecture = value
+                    result.kind = .text
+                    result.architectureSource = "GGUF general.architecture 元数据"
                 case "general.file_type":
                     let types = ["F32", "F16", "Q4_0", "Q4_1", "Q4_1 / F16", "Q4_2", "Q4_3", "Q8_0", "Q5_0", "Q5_1", "Q2_K", "Q3_K_S", "Q3_K_M", "Q3_K_L", "Q4_K_S", "Q4_K_M", "Q5_K_S", "Q5_K_M", "Q6_K"]
                     if let value, let index = Int(value), types.indices.contains(index) {

@@ -211,14 +211,16 @@ struct ChatPage: View {
     }
 
     private func send() {
-        guard let model = selectedModel, !busy else { return }
+        guard let model = selectedModel, !busy, !library.isProcessing else { return }
         messageFocused = false
         sendTask = Task {
             defer { sendTask = nil }
             do {
                 try Task.checkCancellation()
                 guard UIApplication.shared.applicationState == .active else { return }
+                guard !library.isProcessing else { return }
                 await images.stop()
+                guard !library.isProcessing else { return }
                 await chat.send(model: model, fileURL: try library.fileURL(for: model))
             } catch is CancellationError {
                 return
