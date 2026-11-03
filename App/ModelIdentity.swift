@@ -32,9 +32,9 @@ enum ModelIdentity {
         var architecture: String?
         if contains("single_blocks.39.linear1") || contains("single_transformer_blocks.39.attn.to_qkv_mlp_proj") {
             architecture = "flux2"
-        } else if contains("single_transformer_blocks.23.attn.to_qkv_mlp_proj") {
+        } else if contains("single_blocks.23.linear1") || contains("single_transformer_blocks.23.attn.to_qkv_mlp_proj") {
             architecture = "flux2_9b"
-        } else if contains("single_transformer_blocks.19.attn.to_qkv_mlp_proj") {
+        } else if contains("single_blocks.19.linear1") || contains("single_transformer_blocks.19.attn.to_qkv_mlp_proj") {
             architecture = "flux2_4b"
         } else if contains("double_blocks.18.img_attn.qkv") || contains("single_transformer_blocks.37.proj_mlp") {
             architecture = "flux1"
@@ -60,7 +60,7 @@ enum ModelIdentity {
             // Llama, Qwen and Gemma can share these names; never guess an exact architecture.
             return Result(kind: .text, source: "语言模型张量结构；确切架构需要 config.json")
         }
-        if contains("encoder.") && contains("decoder.") && !contains("diffusion_model") {
+        if contains("encoder.conv_in.") && contains("decoder.conv_out.") && !contains("diffusion_model") {
             return Result(kind: .vae, source: "根据编码器／解码器张量结构推断")
         }
         if contains("text_model.encoder.") || contains("shared.weight") && contains("encoder.block.") {
@@ -69,8 +69,10 @@ enum ModelIdentity {
         return Result(kind: .unknown, source: "缺少可确认的架构信息")
     }
 
-    private static func kind(for architecture: String) -> ModelKind {
+    static func kind(for architecture: String) -> ModelKind {
         let value = architecture.lowercased()
+        let compact = value.replacingOccurrences(of: "_", with: "").replacingOccurrences(of: "-", with: "")
+        if compact.contains("qwenimage") || compact.contains("zimage") { return .image }
         if ["stable-diffusion", "sdxl", "flux", "z_image", "z-image", "qwen_image", "qwen-image", "sd3"].contains(where: value.contains)
             || ["v1", "v2"].contains(value) { return .image }
         if ["llama", "qwen", "gemma", "mistral", "deepseek", "phi", "gpt", "falcon", "olmo"].contains(where: value.contains) { return .text }

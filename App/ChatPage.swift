@@ -18,7 +18,7 @@ struct ChatPage: View {
     let openModels: () -> Void
 
     private var selectedModel: LocalModel? {
-        library.models.first { $0.id.uuidString == selectedModelID && $0.format.supportsTextGeneration }
+        library.models.first { $0.id.uuidString == selectedModelID && $0.supportsTextGeneration }
     }
     private var busy: Bool { chat.isBusy || sendTask != nil }
 
@@ -174,7 +174,7 @@ struct ChatPage: View {
     private var modelPicker: some View {
         HStack {
             Menu {
-                ForEach(library.models.filter { $0.format.supportsTextGeneration }) { model in
+                ForEach(library.models.filter { $0.supportsTextGeneration }) { model in
                     Button(model.name) {
                         Task {
                             await chat.unload()

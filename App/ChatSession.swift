@@ -125,7 +125,7 @@ final class ChatSession {
         guard !isBusy else { return }
         let prompt = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
-        guard model.format.supportsTextGeneration else {
+        guard model.supportsTextGeneration else {
             errorMessage = "目前没有可运行 \(model.format.rawValue) 文件的文本引擎。"
             return
         }

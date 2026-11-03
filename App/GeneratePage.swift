@@ -9,7 +9,7 @@ struct GeneratePage: View {
     @State private var prompt = ""
     @State private var negativePrompt = ""
     @State private var size = 512
-    @State private var steps = 4
+    @State private var steps = 0
     @State private var loraID = ""
     @State private var loraWeight = 0.8
     let openModels: () -> Void
@@ -30,7 +30,7 @@ struct GeneratePage: View {
                         ContentUnavailableView {
                             Label("添加生图 Checkpoint", systemImage: "photo.badge.plus")
                         } description: {
-                            Text("导入 MediaGenerationKit 支持的 .ckpt 模型。任意同扩展名权重不一定兼容。")
+                            Text("导入支持的 Checkpoint，或在模型详情中转换 Safetensors。")
                         } actions: {
                             Button("管理模型", action: openModels)
                                 .buttonStyle(.borderedProminent)
@@ -70,7 +70,8 @@ struct GeneratePage: View {
                                 Text("768").tag(768)
                             }
                             Picker("步数", selection: $steps) {
-                                ForEach([4, 8, 16, 24], id: \.self) { n in
+                                Text("模型默认").tag(0)
+                                ForEach([4, 8, 16, 24, 32, 50], id: \.self) { n in
                                     Text("\(n)").tag(n)
                                 }
                             }

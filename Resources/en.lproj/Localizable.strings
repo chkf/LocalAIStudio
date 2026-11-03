@@ -138,3 +138,28 @@
 "首 Token" = "First Token";
 "生成速度" = "Generation Speed";
 "暂无推理记录" = "No Inference Records";
+
+/* Model identification and processing */
+"类型" = "Type";
+"重新识别" = "Inspect Again";
+"模型处理" = "Model Processing";
+"取消处理" = "Cancel Processing";
+"转换模型" = "Convert Model";
+"转换类型" = "Conversion Type";
+"生图主模型" = "Image Model";
+"底模架构" = "Base Architecture";
+"自动识别" = "Detect Automatically";
+"基础配置" = "Base Configuration";
+"请选择" = "Select…";
+"独立 VAE" = "Separate VAE";
+"使用模型内置或标准 VAE" = "Use Embedded or Standard VAE";
+"已识别架构" = "Detected Architecture";
+"转换" = "Convert";
+"转换为生图模型／LoRA" = "Convert Image Model / LoRA";
+"创建 8-bit 主模型" = "Create 8-bit Base Model";
+"用于生图" = "Use for Image Generation";
+"LoRA 强度" = "LoRA Weight";
+"不使用" = "None";
+"清理生图配套资源" = "Clear Image Model Resources";
+"模型默认" = "Model Default";
+"导入支持的 Checkpoint，或在模型详情中转换 Safetensors。" = "Import a supported checkpoint, or convert Safetensors in model details.";

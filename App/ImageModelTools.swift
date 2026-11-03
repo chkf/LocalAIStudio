@@ -19,6 +19,13 @@ struct ImageModelBundle: Codable {
               result.file.hasSuffix(".ckpt"), result.model != nil || result.lora != nil else {
             throw ModelFileError.invalid("生图模型清单无效。")
         }
+        let payload = directory.appendingPathComponent(result.file)
+        let values = try payload.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true, (values.fileSize ?? 0) > 0,
+              (result.model?.file ?? result.lora?.file) == result.file,
+              (result.model?.version.rawValue ?? result.lora?.version.rawValue) == result.version else {
+            throw ModelFileError.invalid("生图模型清单与权重不一致。")
+        }
         return result
     }
 
@@ -44,7 +51,16 @@ enum ImageModelTools {
             "qwen_image_1.0_q8p.ckpt", "qwen_image_2512_q8p.ckpt",
             "flux_2_klein_4b_q8p.ckpt", "flux_2_klein_base_4b_q8p.ckpt"
         ]
-        return ModelZoo.builtinSpecifications.filter { files.contains($0.file) }
+        var result = ModelZoo.builtinSpecifications.filter { files.contains($0.file) }
+        // Parameters from the pinned MediaGenerationKit bundled model catalog.
+        for (name, file) in [("FLUX.1 [dev]", "flux_1_dev_q8p.ckpt"), ("FLUX.1 Krea [dev]", "flux_1_krea_dev_q8p.ckpt")] {
+            result.append(ModelZoo.Specification(name: name, file: file, prefix: "", version: .flux1,
+                defaultScale: 16, textEncoder: "t5_xxl_encoder_q6p.ckpt", autoencoder: "flux_1_vae_f16.ckpt",
+                clipEncoder: "clip_vit_l14_f16.ckpt", highPrecisionAutoencoder: true,
+                objective: .u(conditionScale: 1000), guidanceEmbed: true, paddedTextEncodingLength: 512,
+                hiresFixScale: 24))
+        }
+        return result
     }
 
     static func process(source: URL, name: String, operation: ImageModelOperation, destination: URL,
@@ -53,7 +69,8 @@ enum ImageModelTools {
         switch operation {
         case .lora(let requestedVersion):
             let inspection = try ModelFile.inspect(source, name: name)
-            guard inspection.format == .safetensors, inspection.kind == .lora else {
+            guard inspection.format == .safetensors, inspection.kind == .lora,
+                  inspection.architecture.map({ ModelIdentity.kind(for: $0) != .text }) ?? true else {
                 throw ModelFileError.invalid("请选择 Safetensors LoRA；LoKr 和聊天模型适配器暂不转换。")
             }
             let forced = requestedVersion.flatMap(ModelVersion.init(rawValue:))
@@ -86,6 +103,9 @@ enum ImageModelTools {
             let detected = try probe.inspect()
             guard detected.version == spec.version else {
                 throw ModelFileError.invalid("识别为 \(detected.version.rawValue)，与所选基础配置 \(spec.version.rawValue) 不匹配。")
+            }
+            if detected.version == .flux1 && detected.hasGuidanceEmbed != (spec.guidanceEmbed ?? false) {
+                throw ModelFileError.invalid("FLUX 的 guidance 结构与基础配置不匹配，请核对 dev／schnell 版本。")
             }
             guard detected.modifier == .none else {
                 throw ModelFileError.invalid("当前生图页尚未接入此模型需要的编辑／修补输入。")

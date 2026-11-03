@@ -12,6 +12,7 @@ enum ModelFormat: String, Codable, Sendable, CaseIterable {
     case binary = "Binary"
 
     var supportsTextGeneration: Bool { self == .litertLM || self == .gguf || self == .mlxBundle }
+    var supportsImageGeneration: Bool { self == .checkpoint || self == .drawThingsBundle }
 
     var fileExtension: String {
         switch self {
@@ -41,9 +42,8 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
     var kind: ModelKind? = nil
     var architectureSource: String? = nil
 
-    var supportsImageGeneration: Bool {
-        (format == .checkpoint || format == .drawThingsBundle) && kind != .lora && kind != .lokr
-    }
+    var supportsImageGeneration: Bool { format.supportsImageGeneration && adapter == nil && kind != .lora && kind != .lokr }
+    var supportsTextGeneration: Bool { format.supportsTextGeneration && adapter == nil && kind != .lora && kind != .lokr }
 
     var identitySummary: String {
         let values = [kind?.rawValue, architecture].compactMap { $0 }
@@ -51,6 +51,11 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
     }
 
     var compatibilityDescription: String {
+        if adapter != nil || kind == .lora || kind == .lokr {
+            return format == .drawThingsBundle
+                ? "已转换的 LoRA；在匹配架构的生图模型下选择并设置强度。"
+                : "适配器不能独立运行，需要匹配的基础模型；生图 LoRA 可尝试转换，聊天适配器与 LoKr 暂未接入。"
+        }
         if format == .litertLM {
             return "可尝试用 LiteRT-LM 加载；架构、量化与内存占用需实际验证。"
         }
@@ -61,7 +66,7 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
             return "可尝试用 MLX Swift LM 加载本地模型目录；需完整的 config、tokenizer 与 Safetensors 权重，模型架构须受 MLX 支持。"
         }
         if format == .drawThingsBundle {
-            return kind == .lora ? "已转换的 LoRA；在匹配架构的生图模型下选择并设置强度。" : "已转换的生图模型；配套资源将在加载时检查，运行能力仍需真机验证。"
+            return "已转换的生图模型；配套资源将在加载时检查，运行能力仍需真机验证。"
         }
         if format == .checkpoint {
             return "可尝试通过 MediaGenerationKit 使用支持的生图 Checkpoint；仅凭 .ckpt 扩展名不代表模型兼容。"
@@ -310,6 +315,7 @@ enum ModelFile {
         } catch PrefixReader.Limit.reached {
             result.note = "已识别 GGUF 文件头；元数据超过 8 MiB 检查范围，未完成结构验证。"
         }
+        if result.adapter?.lowercased().hasPrefix("lora") == true { result.kind = .lora }
         return result
     }
 

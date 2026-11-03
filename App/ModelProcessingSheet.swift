@@ -53,9 +53,9 @@ struct ModelProcessingSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 isLoRA = model.kind == .lora || model.adapter?.hasPrefix("LoRA") == true
-                if let architecture = model.architecture,
-                   let profile = ImageModelTools.profiles.first(where: { $0.version.rawValue == architecture }) {
-                    template = profile.file
+                if let architecture = model.architecture {
+                    let matches = ImageModelTools.profiles.filter { $0.version.rawValue == architecture }
+                    if matches.count == 1 { template = matches[0].file }
                 }
             }
             .toolbar {

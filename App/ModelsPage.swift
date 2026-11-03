@@ -116,6 +116,13 @@ struct ModelsPage: View {
                             .accessibilityIdentifier("importMLXFolder")
                         Button("从 HTTPS 下载", systemImage: "arrow.down.circle") { downloading = true }
                             .disabled(library.download?.transfer != nil)
+                        Button("清理生图配套资源", systemImage: "trash") {
+                            do {
+                                let cache = URL.applicationSupportDirectory.appendingPathComponent("ImageRuntime")
+                                if FileManager.default.fileExists(atPath: cache.path) { try FileManager.default.removeItem(at: cache) }
+                            } catch { library.errorMessage = error.localizedDescription }
+                        }
+                        .disabled(library.isProcessing || images.isGenerating)
                     }
                     .disabled(!library.isReady)
                     .accessibilityIdentifier("addModel")
@@ -213,7 +220,7 @@ private struct ModelDetail: View {
                     Button("用于生图", systemImage: "photo") { selectModel(model) }
                         .disabled(library.isProcessing)
                 }
-                if model.format.supportsTextGeneration {
+                if model.supportsTextGeneration {
                     Button("用于 AI 对话", systemImage: "bubble.left.and.bubble.right") { selectModel(model) }
                 }
             } header: {

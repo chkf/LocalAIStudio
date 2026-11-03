@@ -7,11 +7,11 @@ A lightweight native iOS app for on-device AI, model files and device monitoring
 ## Model identification and processing in 0.5.0 (7)
 
 - Model details show architecture, role and the source of that identification. GGUF metadata and MLX `config.json` remain authoritative declarations; Safetensors falls back to tensor names/shapes. Shared chat tensor layouts are deliberately not labelled as a specific Llama/Qwen/Gemma family without configuration. Existing entries can be re-inspected.
-- A raw image Safetensors model can be converted using the pinned Draw Things `ModelOp.ModelImporter`. Choose the matching base configuration (SD1.5, SD2.1, SDXL, FLUX.1 schnell, Qwen Image, Z Image or FLUX.2 klein 4B profiles exposed in the UI). The importer independently checks the architecture; unsupported image/edit inputs fail explicitly. Embedded SD text encoders/VAE are preserved; a separate SD VAE may be selected. This is not universal Safetensors support.
+- A raw image Safetensors model can be converted using the pinned Draw Things `ModelOp.ModelImporter`. Choose the matching base configuration (SD1.5, SD2.1, SDXL, FLUX.1 dev/schnell/Krea, Qwen Image, Z Image or FLUX.2 klein 4B profiles exposed in the UI). The importer independently checks the architecture; unsupported image/edit inputs fail explicitly. Embedded SD text encoders/VAE are preserved; a separate SD VAE may be selected. This is not universal Safetensors support.
 - Safetensors LoRAs can be converted locally with `LoRAImporter`, then selected with a weight in the image page. Generation checks the actual converted architecture against the base model before attaching the LoRA. LoKr and language-model LoRAs are not part of this image conversion path.
 - Converted image base models offer a separate 8-bit Q8P variant, using the existing NNC codec one tensor at a time. Norm/embedding/scalar parameters and companion files retain their precision. Quantization affects the main diffusion weights, not total app RAM or all model components.
 - Conversions are staged and committed as new library entries. Originals are retained; interrupted outputs are cleaned. Cancellation of synchronous upstream import may finish only after the current conversion returns; the app stays busy until then. Chat/image inference is stopped before model processing.
-- Converted bundles retain model metadata and local components. Missing standard resources are downloaded by the generation engine into its separate runtime cache. Models and LoRAs are linked into that runtime only for the active generation.
+- Converted bundles retain model metadata and local components. Missing standard resources are downloaded by the generation engine into its separate runtime cache. Models and LoRAs are linked into that runtime only for the active generation. The Models menu can clear downloaded image resources while no image/model-processing task is running.
 - CI enables the pinned MLX macro for unattended Xcode builds. Portable metadata/identification tests run separately; simulator tests are explicitly skipped when the pinned llama XCFramework lacks simulator slices. This does not count as passing simulator or device inference tests.
 
 This release still needs an iPhone check with real model/LoRA files: conversion, comparison with/without LoRA, quantized output quality, cancellation and peak memory. Chat-model conversion/quantization is not provided by these Draw Things image tools.
@@ -61,16 +61,16 @@ The previous simulator tests used tiny files inside the app's exposed Debug Docu
 - Public HTTPS/Hugging Face `resolve` links support progress, pause/cancel and conditional resume. Repository pages, authenticated repositories and CivitAI parsing are not implemented. Backgrounding pauses downloads. Continuation depends on the server and retained temporary data.
 - The official pinned LiteRT-LM Swift package provides text loading, streaming, cancellation, unloading and conversation/input recovery. Native initialization itself is not immediately cancellable. One heavy task runs at a time; dynamic context is capped at 2,048 tokens and output at 512. Backgrounding requests cancellation/unload, not continued inference.
 - Model load timing and engine-reported TTFT/tokens/s are recorded when available. File size is not treated as peak RAM; iOS can terminate a process before a memory warning.
-- Image-to-chat input, direct audio-to-model input, separately downloaded Kokoro/Parakeet engines, image history/gallery, applied LoRA/LoKr, arbitrary Checkpoint conversion, WidgetKit, App Intents, Live Activities and continuous cross-app monitoring are **not implemented**. Native device dictation and speech playback are separate from model audio input.
+- Image-to-chat input, direct audio-to-model input, separately downloaded Kokoro/Parakeet engines, image history/gallery, LoKr and chat-adapter application, universal Checkpoint conversion, WidgetKit, App Intents, Live Activities and continuous cross-app monitoring are **not implemented**. Image LoRA and compatible Safetensors conversion are described above. Native device dictation and speech playback are separate from model audio input.
 
 ## Build and verification
 
-Windows/WSL2 can edit the project. GitHub Actions uses the Xcode 27 macOS runner. Pull requests to `main` build an unsigned Release IPA and run simulator unit/UI tests; pushes to `main` build the unsigned IPA. No signing credentials, model weights or deployment are included.
+Windows/WSL2 can edit the project. GitHub Actions uses the Xcode 27 macOS runner. Pull requests to `main` run portable logic tests, build an unsigned Release IPA and run simulator unit/UI tests only when the pinned inference frameworks include simulator slices; pushes to `main` run the logic tests and build the unsigned IPA. No signing credentials, model weights or deployment are included.
 
 ```sh
 export GIT_LFS_SKIP_SMUDGE=1
 xcodegen generate
-xcodebuild -project LocalAIStudio.xcodeproj -scheme LocalAIStudio \
+xcodebuild -skipMacroValidation -project LocalAIStudio.xcodeproj -scheme LocalAIStudio \
   -configuration Release -destination 'generic/platform=iOS' \
   CODE_SIGNING_ALLOWED=NO build
 ```

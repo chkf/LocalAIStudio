@@ -106,7 +106,7 @@ final class ModelLibrary {
         await prepare()
         guard !Task.isCancelled, !processingCancelled else { return }
         processingStatus = "正在处理 \(model.name)"
-        let job = Task {
+        let job = Task { [weak self] in
             try await files.process(model, operation: operation) { [weak self] fraction in
                 Task { @MainActor in self?.processingProgress = min(1, max(0, fraction)) }
             }

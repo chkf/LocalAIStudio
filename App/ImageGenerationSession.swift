@@ -67,9 +67,23 @@ final class ImageGenerationSession {
                 )
                 if let template {
                     let reference = try await MediaGenerationPipeline.fromPretrained(template, backend: .local(directory: directory.path))
-                    pipeline.configuration = reference.configuration
+                    // The model binding is read-only. Transfer sampling defaults without replacing it.
+                    let defaults = reference.configuration
+                    pipeline.configuration.steps = defaults.steps
+                    pipeline.configuration.sampler = defaults.sampler
+                    pipeline.configuration.seedMode = defaults.seedMode
+                    pipeline.configuration.guidanceScale = defaults.guidanceScale
+                    pipeline.configuration.strength = defaults.strength
+                    pipeline.configuration.clipSkip = defaults.clipSkip
+                    pipeline.configuration.shift = defaults.shift
+                    pipeline.configuration.resolutionDependentShift = defaults.resolutionDependentShift
+                    pipeline.configuration.guidanceEmbed = defaults.guidanceEmbed
+                    pipeline.configuration.speedUpWithGuidanceEmbed = defaults.speedUpWithGuidanceEmbed
+                    pipeline.configuration.t5TextEncoder = defaults.t5TextEncoder
+                    pipeline.configuration.zeroNegativePrompt = defaults.zeroNegativePrompt
+                    pipeline.configuration.aestheticScore = defaults.aestheticScore
+                    pipeline.configuration.negativeAestheticScore = defaults.negativeAestheticScore
                 }
-                pipeline.configuration.model = modelFile
                 pipeline.configuration.loras = []
                 if let lora {
                     let bundle = try ImageModelBundle.read(lora.url)
@@ -83,7 +97,7 @@ final class ImageGenerationSession {
                 }
                 pipeline.configuration.width = size
                 pipeline.configuration.height = size
-                pipeline.configuration.steps = steps
+                if steps > 0 { pipeline.configuration.steps = steps }
                 let results = try await pipeline.generate(
                     prompt: prompt, negativePrompt: negativePrompt,
                     stateHandler: { state in

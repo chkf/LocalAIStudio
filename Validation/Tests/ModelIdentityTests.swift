@@ -31,9 +31,25 @@ final class ModelIdentityTests: XCTestCase {
         XCTAssertNil(result.architecture)
     }
 
+    func testFluxVariantsAndQwenImageStayDistinctFromChatModels() {
+        for (key, expected) in [
+            ("double_blocks.18.img_attn.qkv.weight", "flux1"),
+            ("single_blocks.39.linear1.weight", "flux2"),
+            ("single_blocks.23.linear1.weight", "flux2_9b"),
+            ("single_blocks.19.linear1.weight", "flux2_4b"),
+            ("transformer_blocks.59.txt_mlp.weight", "qwen_image")
+        ] {
+            let result = ModelIdentity.identify(metadata: [:], tensors: [key: [16, 16]])
+            XCTAssertEqual(result.architecture, expected)
+            XCTAssertEqual(result.kind, .image)
+        }
+    }
+
     func testComponentAndUnknownRoles() {
         XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["encoder.conv_in.weight": [4], "decoder.conv_out.weight": [4]]).kind, .vae)
         XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["text_model.encoder.layers.0.weight": [4]]).kind, .textEncoder)
+        XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["shared.weight": [4], "encoder.block.0.weight": [4], "decoder.block.0.weight": [4]]).kind, .textEncoder)
+        XCTAssertEqual(ModelIdentity.identify(metadata: ["modelspec.architecture": "QwenImage"], tensors: [:]).kind, .image)
         XCTAssertNil(ModelIdentity.identify(metadata: [:], tensors: ["weight": [1]]).architecture)
     }
 
@@ -44,6 +60,14 @@ final class ModelIdentityTests: XCTestCase {
         let model = try JSONDecoder().decode(LocalModel.self, from: Data(old.utf8))
         XCTAssertNil(model.kind)
         XCTAssertNil(model.architectureSource)
+    }
+
+    func testAdapterCannotBeSelectedAsStandaloneChatModel() {
+        let adapter = LocalModel(id: UUID(), name: "adapter.gguf", byteCount: 1, importedAt: .now,
+            format: .gguf, architecture: "llama", quantization: nil, adapter: "LoRA",
+            validationNote: "metadata", kind: .lora)
+        XCTAssertFalse(adapter.supportsTextGeneration)
+        XCTAssertFalse(adapter.supportsImageGeneration)
     }
 
     func testFilenameNeverDeterminesSafetensorsArchitecture() throws {
