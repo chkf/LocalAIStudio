@@ -9,6 +9,8 @@ enum ModelFormat: String, Codable, Sendable, CaseIterable {
     case checkpoint = "Checkpoint"
     case binary = "Binary"
 
+    var supportsTextGeneration: Bool { self == .litertLM || self == .gguf }
+
     var fileExtension: String {
         switch self {
         case .litertLM: "litertlm"
@@ -36,6 +38,9 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
     var compatibilityDescription: String {
         if format == .litertLM {
             return "可尝试用 LiteRT-LM 加载；架构、量化与内存占用需实际验证。"
+        }
+        if format == .gguf {
+            return "可尝试用 llama.cpp 加载单文件 GGUF 文本模型；架构、聊天模板及内存需求需实际验证。"
         }
         return "当前未接入此格式的推理引擎，仅可存储与管理。适配器还需匹配的基础模型。"
     }

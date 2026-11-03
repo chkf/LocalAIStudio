@@ -153,7 +153,7 @@ private struct ModelDetail: View {
             }
             Section {
                 Text(model.compatibilityDescription)
-                if model.format == .litertLM {
+                if model.format.supportsTextGeneration {
                     Button("用于 AI 对话", systemImage: "bubble.left.and.bubble.right") { selectModel(model) }
                 }
             } header: {

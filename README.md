@@ -2,7 +2,15 @@
 
 A lightweight native iOS app for on-device AI, model files and device monitoring, built with SwiftUI and native Liquid Glass controls.
 
-**Current implementation:** model management, the native **System** dashboard, appearance settings and a LiteRT-LM text inference path. **Gemma 4 E4B has not been verified on a physical iPhone in this project.** Image generation and system extensions remain planned.
+**Current implementation:** model management, the native **System** dashboard, appearance settings, LiteRT-LM text inference and a llama.cpp GGUF text path. **Gemma 4 E4B has not been verified on a physical iPhone in this project.** Image generation and system extensions remain planned.
+
+## GGUF / DeepSeek support in 0.3.0 (5)
+
+- Added a second, real local text runtime based on llama.cpp (pinned via llama.swift 2.10549.0, upstream b10549 XCFramework). Single-file **GGUF text models** and LiteRT-LM appear in one model selector, with shared streaming chat, cancellation, unloading, history persistence, system prompts, CPU/Metal selection, sampler controls and measured performance.
+- Each GGUF response applies the model's embedded chat template to the current chat history, then tokenizes, prefills and streams token pieces using the native llama.cpp APIs. Unsupported or absent chat templates fail clearly. Multi-part models, custom Jinja-only templates and external multimodal projectors are not claimed to work.
+- The GGUF runtime cancels decoding via a thread-safe flag rather than waiting for the actor to finish its synchronous C calls. A single heavyweight model remains active at a time. Saving an imported GGUF file does not guarantee it is supported or fits in memory.
+- Recommended first compatibility target: `bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF` file `DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf` (~1.12 GB); **model weights are not included**. iPhone inference, CPU/Metal throughput, memory peak and C++ cancellation still require device verification.
+- `.safetensors`, `.ckpt`, `.tflite`, and other formats still require their own actual engines or complete model directories; they remain storage/inspection-only. GGUF thinking follows the model's chat template; the speculative decoding option is explicitly rejected for GGUF rather than silently ignored.
 
 ## Changes in 0.2.0 (4)
 

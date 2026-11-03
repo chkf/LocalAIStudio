@@ -17,7 +17,7 @@ struct ChatPage: View {
     let openModels: () -> Void
 
     private var selectedModel: LocalModel? {
-        library.models.first { $0.id.uuidString == selectedModelID && $0.format == .litertLM }
+        library.models.first { $0.id.uuidString == selectedModelID && $0.format.supportsTextGeneration }
     }
     private var busy: Bool { chat.isBusy || sendTask != nil }
 
@@ -30,7 +30,7 @@ struct ChatPage: View {
                     ContentUnavailableView {
                         Label("在这台 iPhone 上对话", systemImage: "bubble.left.and.bubble.right")
                     } description: {
-                        Text(selectedModel == nil ? "先导入并选择一个 LiteRT-LM 模型。" : "消息由本地模型处理。首次发送时会加载所选模型。")
+                        Text(selectedModel == nil ? "先导入并选择一个 LiteRT-LM 或 GGUF 模型。" : "消息由本地模型处理。首次发送时会加载所选模型。")
                     } actions: {
                         if selectedModel == nil {
                             Button("选择模型", action: openModels).buttonStyle(.borderedProminent)
@@ -138,7 +138,7 @@ struct ChatPage: View {
             .confirmationDialog("首次尝试这个模型", isPresented: $confirmingLoad, titleVisibility: .visible) {
                 Button("加载并发送") { send() }
             } message: {
-                Text("模型的实际内存需求尚未经本机验证，文件大小不能代表运行峰值。\(memoryBudgetText) 动态上下文最多 2048 Token，固定上下文按模型配置；单轮输出最多 512 Token。你可以停止生成或卸载模型。")
+                Text("模型的实际内存需求尚未经本机验证，文件大小不能代表运行峰值。\(memoryBudgetText) 最大输出 \(chat.preferences.maxOutputTokens) Token；实际上下文窗口及后端支持情况取决于模型。你可以停止生成或卸载模型。")
             }
             .confirmationDialog("清空当前对话？", isPresented: $confirmingClear, titleVisibility: .visible) {
                 Button("清空对话", role: .destructive) { Task { await chat.clear() } }
@@ -173,7 +173,7 @@ struct ChatPage: View {
     private var modelPicker: some View {
         HStack {
             Menu {
-                ForEach(library.models.filter { $0.format == .litertLM }) { model in
+                ForEach(library.models.filter { $0.format.supportsTextGeneration }) { model in
                     Button(model.name) {
                         Task {
                             await chat.unload()

@@ -30,6 +30,16 @@ LiteRT-LM 代码采用 [Apache-2.0](https://github.com/google-ai-edge/LiteRT-LM/
 3. 测试加载中取消、生成中取消、切到后台、系统终止后的输入恢复，以及长输入超出上下文的错误提示。
 4. 在以上结果完成前，模型仍标为“可尝试加载 / 尚未真机验证”，不宣称 Gemma 4 E4B 已跑通。
 
+## llama.cpp / GGUF 文本后端（新增）
+
+采用 `mattt/llama.swift` 2.10549.0（llama.cpp b10549 官方 XCFramework，MIT 许可）。这是 iOS/Metal 上实际使用的第二个文本引擎，不是只识别文件头或占位接口。
+
+- 在模型库中选择单文件 `.gguf`，文本聊天将走 llama.cpp；原 `.litertlm` 仍走 LiteRT-LM。
+- 使用 GGUF 自带聊天模板构造 system/user/assistant 多轮输入，预填充按 512 token 分块，逐 token 流式解码；每轮重建上下文，超出窗口明确报错，不静默截断。
+- 支持 CPU/Metal、Top-K、Top-P、Temperature、最大输出 Token、取消、释放模型/上下文和实际时间/速度统计。
+- 不宣称兼容所有 GGUF 架构、模板、多分片或视觉音频附属文件。推测解码开关目前只接 LiteRT-LM，对 GGUF 会报明确不支持。
+- **仍需真机实测** DeepSeek-R1-Distill-Qwen-1.5B Q4_K_M 的加载、首 token、连续生成、多轮、取消和卸载；IPA 编译通过不等于这些功能已在目标设备通过。
+
 ## MediaGenerationKit：已核实，尚未接入
 
 上游[包清单](https://github.com/drawthingsai/media-generation-kit/blob/8868a9685d9c299816f43ef53efd455ffca437f0/Package.swift)声明 iOS 16+，通过固定 revision 依赖 `draw-things-community`。它不是不存在的占位 SDK；公开 API 包括 `MediaGenerationPipeline.fromPretrained`、`.local(directory:)`、生成进度与结果写入、`MediaGenerationEnvironment` 的模型解析/下载，以及本地转换用 `LoRAImporter`。[官方 README](https://github.com/drawthingsai/media-generation-kit/blob/8868a9685d9c299816f43ef53efd455ffca437f0/README.md)。

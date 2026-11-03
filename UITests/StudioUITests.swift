@@ -198,7 +198,7 @@ final class StudioUITests: XCTestCase {
 
     private func sampleNumber(_ label: String) -> Int? {
         // LabeledContent exposes its title and value together: "最近样本, 5".
-        label.split(separator: ",").last.flatMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        label.split(whereSeparator: { !$0.isNumber }).last.flatMap { Int($0) }
     }
 
     @MainActor

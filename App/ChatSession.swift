@@ -125,8 +125,8 @@ final class ChatSession {
         guard !isBusy else { return }
         let prompt = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
-        guard model.format == .litertLM else {
-            errorMessage = "文本推理目前只支持 LiteRT-LM 文件，不能运行 \(model.format.rawValue)。"
+        guard model.format.supportsTextGeneration else {
+            errorMessage = "目前没有可运行 \(model.format.rawValue) 文件的文本引擎。"
             return
         }
         let history = messages.filter { !$0.isInterrupted && !$0.text.isEmpty }
@@ -227,17 +227,17 @@ final class ChatSession {
                 status = "正在加载 \(model.name)"
                 loadedModelID = nil
                 loadSeconds = nil
-                loadSeconds = try await runtime.load(fileURL: fileURL, history: history, options: options)
+                loadSeconds = try await runtime.load(fileURL: fileURL, format: model.format, history: history, options: options)
                 loadedModelID = model.id
             }
             if cancellationRequested { throw CancellationError() }
             status = "正在生成"
             messages.append(ChatMessage(id: assistantID, role: .assistant, text: ""))
-            let stream = await runtime.stream(prompt: prompt, messageID: userID, maxOutputTokens: options.maxOutputTokens)
+            let stream = await runtime.stream(prompt: prompt, messageID: userID, history: history, maxOutputTokens: options.maxOutputTokens)
             if cancellationRequested { try await runtime.cancel(messageID: userID) }
             for try await chunk in stream {
                 if !cancellationRequested, let index = messages.firstIndex(where: { $0.id == assistantID }) {
-                    messages[index].text += chunk.toString
+                    messages[index].text += chunk
                 }
             }
             if cancellationRequested { throw CancellationError() }
@@ -299,11 +299,20 @@ private actor TextRuntime {
 
     private var engine: Engine?
     private var conversation: Conversation?
+    private let gguf = GGUFTextRuntime()
+    private var currentFormat: ModelFormat?
     private var activeMessageID: UUID?
     private(set) var backendName = ""
 
-    func load(fileURL: URL, history: [ChatMessage], options: ChatPreferences) async throws -> Double {
-        unload()
+    func load(fileURL: URL, format: ModelFormat, history: [ChatMessage], options: ChatPreferences) async throws -> Double {
+        await unload()
+        if format == .gguf {
+            if options.enableSpeculativeDecoding { throw ChatError.unsupportedSpeculativeDecoding }
+            let elapsed = try await gguf.load(fileURL: fileURL, history: history, options: options)
+            currentFormat = .gguf
+            backendName = await gguf.backendName
+            return elapsed
+        }
         let start = ContinuousClock.now
         let configuration = try configuration(fileURL: fileURL, backendPreference: options.backend, maxOutputTokens: options.maxOutputTokens)
         ExperimentalFlags.optIntoExperimentalAPIs()
@@ -326,29 +335,53 @@ private actor TextRuntime {
             automaticToolCalling: false,
             enableSpeculativeDecoding: options.enableSpeculativeDecoding
         ))
+        currentFormat = .litertLM
         backendName = configuration.backend == .gpu ? "Metal" : "CPU"
         let elapsed = start.duration(to: .now).components
         return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
     }
 
-    func stream(prompt: String, messageID: UUID, maxOutputTokens: Int) -> AsyncThrowingStream<Message, Error> {
+    func stream(prompt: String, messageID: UUID, history: [ChatMessage], maxOutputTokens: Int) async -> AsyncThrowingStream<String, Error> {
         activeMessageID = messageID
-        return conversation!.sendMessageStream(Message(prompt), maxOutputTokens: maxOutputTokens)
+        if currentFormat == .gguf {
+            return await gguf.stream(prompt: prompt, history: history, maxOutputTokens: maxOutputTokens)
+        }
+        let conversation = conversation!
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    for try await chunk in conversation.sendMessageStream(Message(prompt), maxOutputTokens: maxOutputTokens) {
+                        continuation.yield(chunk.toString)
+                    }
+                    continuation.finish()
+                } catch { continuation.finish(throwing: error) }
+            }
+        }
     }
 
     func cancel(messageID: UUID) throws {
         guard activeMessageID == messageID else { return }
-        try conversation?.cancel()
+        if currentFormat == .gguf { gguf.cancel() }
+        else { try conversation?.cancel() }
     }
 
-    func unload() {
+    func unload() async {
+        await gguf.unload()
         conversation = nil
         engine = nil
+        currentFormat = nil
+        backendName = ""
         activeMessageID = nil
     }
 
-    func metrics() throws -> Metrics {
+    func metrics() async throws -> Metrics {
         defer { activeMessageID = nil }
+        if currentFormat == .gguf {
+            let values = await gguf.metrics()
+            return Metrics(firstTokenSeconds: values?.firstTokenSeconds,
+                           tokensPerSecond: values?.tokensPerSecond,
+                           outputTokens: values?.outputTokens)
+        }
         let info = try conversation!.getBenchmarkInfo()
         return Metrics(
             firstTokenSeconds: info.timeToFirstTokenInSecond > 0 ? info.timeToFirstTokenInSecond : nil,
@@ -388,7 +421,7 @@ private actor TextRuntime {
 }
 
 private enum ChatError: LocalizedError {
-    case noMemoryBudget, unreadableArchive, notTextModel, unsupportedBackend
+    case noMemoryBudget, unreadableArchive, notTextModel, unsupportedBackend, unsupportedSpeculativeDecoding
 
     var errorDescription: String? {
         switch self {
@@ -396,6 +429,7 @@ private enum ChatError: LocalizedError {
         case .unreadableArchive: "原对话文件无法读取。为避免覆盖，请先确认清空对话。"
         case .notTextModel: "该 LiteRT-LM 文件不是支持文本输入的语言模型。"
         case .unsupportedBackend: "该模型未提供可在此 App 使用的 CPU 或 Metal 后端。"
+        case .unsupportedSpeculativeDecoding: "GGUF 后端暂未接入推测解码，请在模型配置中关闭后重试。"
         }
     }
 }
