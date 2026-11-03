@@ -21,6 +21,9 @@ packages:
     url: https://github.com/google-ai-edge/LiteRT-LM.git
     # Official v0.18.1 release: keep Swift wrappers and XCFramework on the same release.
     revision: bda624851d74be34d4e1f7fac1fc4155939539c7
+  LlamaSwift:
+    url: https://github.com/mattt/llama.swift.git
+    exactVersion: 2.10549.0
 
 targets:
   LocalAIStudio:
@@ -40,6 +43,8 @@ targets:
     dependencies:
       - package: LiteRTLM
         product: LiteRTLM
+      - package: LlamaSwift
+        product: LlamaSwift
     settings:
       base:
         # Preserve bundle identity and the existing app/model container on upgrade.
