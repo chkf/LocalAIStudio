@@ -6,7 +6,7 @@ import XCTest
 final class ModelDocumentPickerTests: XCTestCase {
     func testAppDisplayName() {
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "AI Studio")
-        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String, "AI Studio")
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String, "LocalAIStudio")
     }
 
     func testProductionAppDoesNotExposeFixtureDocuments() {
