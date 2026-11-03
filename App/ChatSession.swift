@@ -298,13 +298,12 @@ final class ChatSession {
 
     private func prepareWebAnswer(prompt: String, userID: UUID, assistantID: UUID,
                                   history: [ChatMessage]) async throws -> String {
-        let key = try WebSearchKey.read()
         var results: [WebToolResult] = []
         var calls: [WebToolCall] = []
         for _ in 0..<WebAgent.maxCalls {
             if cancellationRequested { throw CancellationError() }
             status = "正在选择联网工具…"
-            let planning = try WebAgent.prompt(request: prompt, results: results, planning: true, searchAvailable: !key.isEmpty)
+            let planning = try WebAgent.prompt(request: prompt, results: results, planning: true)
             let stream = try await runtime.stream(prompt: planning, messageID: userID, history: history,
                                                   maxOutputTokens: 512, reset: true, planning: true)
             if cancellationRequested { try await runtime.cancel(messageID: userID) }
@@ -322,7 +321,7 @@ final class ChatSession {
             if let index = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[index].webActivity = (messages[index].webActivity ?? []) + [label]
             }
-            let job = Task { try await webTools.execute(call, searchKey: key) }
+            let job = Task { try await webTools.execute(call) }
             webOperation = job
             let result = try await job.value
             webOperation = nil
@@ -335,7 +334,7 @@ final class ChatSession {
                 if let error = result.error { messages[index].webActivity?.append(error) }
             }
         }
-        return try WebAgent.prompt(request: prompt, results: results, planning: false, searchAvailable: !key.isEmpty)
+        return try WebAgent.prompt(request: prompt, results: results, planning: false)
     }
 
     private func persist() throws {

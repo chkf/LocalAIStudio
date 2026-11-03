@@ -10,18 +10,10 @@ private final class NoWebRedirects: NSObject, URLSessionTaskDelegate, @unchecked
 }
 
 actor WebTools {
-    private struct SearchResponse: Decodable {
-        struct Web: Decodable {
-            struct Result: Decodable { let title: String; let url: String; let description: String? }
-            let results: [Result]?
-        }
-        let web: Web?
-    }
-
-    func execute(_ call: WebToolCall, searchKey: String) async throws -> WebToolResult {
+    func execute(_ call: WebToolCall) async throws -> WebToolResult {
         do {
             switch call.tool {
-            case .web_search: return try await search(call.query!, key: searchKey)
+            case .web_search: return try await search(call.query!)
             case .read_webpage: return try await read(call.url!)
             case .answer: return WebToolResult(tool: "answer", sources: [], error: nil)
             }
@@ -32,23 +24,11 @@ actor WebTools {
         }
     }
 
-    private func search(_ query: String, key: String) async throws -> WebToolResult {
-        guard !key.isEmpty else { throw WebToolError.invalid("尚未设置 Brave Search API Key。可以直接提供网页链接。") }
-        var components = URLComponents(string: "https://api.search.brave.com/res/v1/web/search")!
-        components.queryItems = [URLQueryItem(name: "q", value: query), URLQueryItem(name: "count", value: "5")]
-        var request = URLRequest(url: components.url!)
-        request.setValue(key, forHTTPHeaderField: "X-Subscription-Token")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, _) = try await fetch(request, redirects: false)
-        let response = try JSONDecoder().decode(SearchResponse.self, from: data)
-        var sources: [WebSource] = []
-        for result in (response.web?.results ?? []).prefix(5) {
-            guard let url = try? WebURLPolicy.url(result.url) else { continue }
-            sources.append(WebSource(title: String(result.title.prefix(160)), url: url,
-                                     excerpt: String((try SwiftSoup.parse(result.description ?? "").text()).prefix(400))))
-        }
-        return WebToolResult(tool: "web_search", sources: sources,
-                             error: sources.isEmpty ? "没有找到可用的公开 HTTPS 搜索结果。" : nil)
+    private func search(_ query: String) async throws -> WebToolResult {
+        var components = URLComponents(string: "https://html.duckduckgo.com/html/")!
+        components.queryItems = [URLQueryItem(name: "q", value: query)]
+        let (data, _) = try await fetch(URLRequest(url: components.url!), redirects: true)
+        return try WebSearchResults.parse(data)
     }
 
     private func read(_ rawURL: String) async throws -> WebToolResult {
@@ -109,7 +89,7 @@ actor WebTools {
                 continue
             }
             guard (200...299).contains(http.statusCode) else {
-                throw WebToolError.invalid("网络服务返回 HTTP \(http.statusCode)。请检查链接、搜索 Key 或服务额度。")
+                throw WebToolError.invalid("网络服务返回 HTTP \(http.statusCode)。搜索服务可能暂时限制访问，请稍后重试或直接提供网页链接。")
             }
             let limit = 1_024 * 1_024
             guard http.expectedContentLength <= Int64(limit) else { throw WebToolError.invalid("网页超过 1 MiB 读取限制。") }

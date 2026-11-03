@@ -104,7 +104,7 @@ LiteRT-LM is pinned to official v0.18.1 and uses Apache-2.0; see [third-party no
 
 ### Chat 联网工具
 
-在「对话设置 → 联网工具」开启「允许联网」（默认关闭）。搜索使用自己的 Brave Search API Key，保存在本机钥匙串；搜索服务可能按账户额度计费。读取公开 HTTPS 网页不需要 Key，不使用浏览器登录态，不执行网页脚本，不支持登录墙、PDF 或纯 JavaScript 页面。
+在「对话设置 → 联网工具」开启「允许联网」（默认关闭）。搜索使用 DuckDuckGo 公开 HTML 搜索页，无需注册或 API Key；遇到验证码、访问限制或页面结构变化时会明确报错，不尝试绕过。网页读取同样无需 Key，不使用浏览器登录态，不执行网页脚本，不支持登录墙、PDF 或纯 JavaScript 页面。
 
 开启后，本地模型通过严格 JSON 请求选择 `web_search`、`read_webpage` 或直接回答；App 实际执行请求，将有限的搜索摘要／正文节选交回模型。每轮最多 3 次联网调用，显示调用记录和实际来源链接，停止生成会取消网络请求。LiteRT-LM 的工具规划阶段关闭思考；最终回答保留用户设置。GGUF／MLX 复用文本接口，能否输出有效工具 JSON 取决于模型，尚未完成各架构真机兼容性验收。
 

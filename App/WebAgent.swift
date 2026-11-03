@@ -69,20 +69,14 @@ enum WebAgent {
         let retrieved: [WebToolResult]
     }
 
-    static func prompt(request: String, results: [WebToolResult], planning: Bool, searchAvailable: Bool) throws -> String {
+    static func prompt(request: String, results: [WebToolResult], planning: Bool) throws -> String {
         let data = try JSONEncoder().encode(Input(request: request, retrieved: results))
         let context = String(decoding: data, as: UTF8.self)
-        if !planning {
-            let availability = searchAvailable ? "Search is configured." : "Search is unavailable because no API key is configured; URL reading remains available."
-            return "WEB_ANSWER\nAnswer the request using the evidence when relevant. \(availability)\n" + context
-        }
-        let search = searchAvailable
-            ? "{\"tool\":\"web_search\",\"query\":\"search terms\"}"
-            : "web_search is unavailable: no search API key is configured."
+        if !planning { return "WEB_ANSWER\nAnswer the request using the evidence when relevant.\n" + context }
         return """
         WEB_PLAN
         Choose the next action for the user's request. Reply with one JSON object only:
-        \(search)
+        {"tool":"web_search","query":"search terms"}
         {"tool":"read_webpage","url":"https://public.example/article"}
         {"tool":"answer"}
         Read a supplied URL when the user asks about it. Search if fresh information is needed.

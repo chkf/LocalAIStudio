@@ -190,9 +190,7 @@
 // Web tools
 "联网工具" = "Web tools";
 "允许联网" = "Allow web access";
-"获取搜索 API Key" = "Get a search API key";
-"联网设置" = "Web settings";
 "联网记录" = "Web activity";
 "网页来源" = "Web sources";
-"联网默认关闭。开启后，模型可搜索和读取公开网页；搜索词和链接会发给对应服务。搜索需要自己的 Brave Key，网页读取无需 Key；Key 只保存在本机钥匙串。" = "Web access is off by default. When enabled, search terms and URLs are sent to the relevant services. Search requires your own Brave key; reading public pages does not. The key is stored in this device’s Keychain.";
-"联网调用会增加等待时间和上下文占用；需要模型正确输出工具请求，部分模型可能不兼容。搜索服务按你的账户额度计费。" = "Web tools add latency and context usage. The model must produce valid tool requests; some models may be incompatible. Search usage is billed under your provider account.";
+"联网默认关闭。开启后可直接搜索和读取公开网页，无需注册或填写 API Key；搜索词和链接会发给对应网站。" = "Web access is off by default. Enable it to search and read public pages without registration or API keys. Search terms and URLs are sent to the relevant websites.";
+"搜索使用公开网页，可能遇到访问限制；失败时会明确提示，也可以直接提供链接。联网会增加等待时间，需要模型正确输出工具请求。" = "Public search pages may restrict access. Failures are shown explicitly; you can also provide a link. Web access adds latency and requires valid model tool requests.";
