@@ -47,7 +47,7 @@ final class ModelIdentityTests: XCTestCase {
 
     func testComponentAndUnknownRoles() {
         XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["encoder.conv_in.weight": [4], "decoder.conv_out.weight": [4]]).kind, .vae)
-        XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["text_model.encoder.layers.0.weight": [4]]).kind, .textEncoder)
+        XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["text_model.encoder.layers.0.self_attn.q_proj.weight": [16, 16]]).kind, .textEncoder)
         XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["shared.weight": [4], "encoder.block.0.weight": [4], "decoder.block.0.weight": [4]]).kind, .textEncoder)
         XCTAssertEqual(ModelIdentity.identify(metadata: ["modelspec.architecture": "QwenImage"], tensors: [:]).kind, .image)
         XCTAssertNil(ModelIdentity.identify(metadata: [:], tensors: ["weight": [1]]).architecture)

@@ -56,15 +56,15 @@ enum ModelIdentity {
             return Result(architecture: architecture, kind: adapterKind ?? .image, source: "根据张量结构推断，转换时由引擎确认")
         }
         if let adapterKind { return Result(kind: adapterKind, source: "根据适配器张量键识别；底模尚未确认") }
+        if contains("text_model.encoder.") || contains("shared.weight") && contains("encoder.block.") {
+            return Result(kind: .textEncoder, source: "根据文本编码器张量结构推断")
+        }
         if contains("self_attn.q_proj") || contains("self_attn.qkv_proj") || contains("attention.wq.") {
             // Llama, Qwen and Gemma can share these names; never guess an exact architecture.
             return Result(kind: .text, source: "语言模型张量结构；确切架构需要 config.json")
         }
         if contains("encoder.conv_in.") && contains("decoder.conv_out.") && !contains("diffusion_model") {
             return Result(kind: .vae, source: "根据编码器／解码器张量结构推断")
-        }
-        if contains("text_model.encoder.") || contains("shared.weight") && contains("encoder.block.") {
-            return Result(kind: .textEncoder, source: "根据文本编码器张量结构推断")
         }
         return Result(kind: .unknown, source: "缺少可确认的架构信息")
     }
