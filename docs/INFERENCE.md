@@ -40,11 +40,25 @@ LiteRT-LM 代码采用 [Apache-2.0](https://github.com/google-ai-edge/LiteRT-LM/
 - 不宣称兼容所有 GGUF 架构、模板、多分片或视觉音频附属文件。推测解码开关目前只接 LiteRT-LM，对 GGUF 会报明确不支持。
 - **仍需真机实测** DeepSeek-R1-Distill-Qwen-1.5B Q4_K_M 的加载、首 token、连续生成、多轮、取消和卸载；IPA 编译通过不等于这些功能已在目标设备通过。
 
-## MediaGenerationKit：已核实，尚未接入
+## MLX Swift LM：完整 Safetensors 模型目录
+
+- 锁定 `mlx-swift-lm` 3.32.3，以及 Hugging Face tokenizer 兼容包。通过 `LLMModelFactory.shared.loadContainer(from:using:)` 从已导入的完整本地目录读取模型，不按独立 `.safetensors` 后缀推断兼容性。
+- 模型文件夹必须包含 `config.json` 的 `model_type`、`tokenizer.json`、至少一份 `.safetensors`。导入会检查清单、拒绝符号链接、原子入库，但真正架构/权重兼容性由 MLX 加载时验证。
+- 推理支持多轮消息、系统提示词、Top-K/Top-P/温度、生成长度、流式文本、停止、卸载与真实统计。MLX 使用 Apple Metal；强制 CPU 或当前未接线的推测/思考开关会明确报错。
+- 本轮只接文本语言模型。VLM 图片输入、LoRA、任意 Safetensors 格式转换需要按架构继续验证。
+
+## MediaGenerationKit：Checkpoint 生图（新增）
+
+- 锁定 `drawthingsai/media-generation-kit` 提供的 LGPL-3.0 SwiftPM 接口，使用 `MediaGenerationPipeline.fromPretrained(... backend: .local(directory:))` 加载 **ModelZoo 能识别的**本地 `.ckpt` 模型。
+- 生图页提供提示词、负面提示词、尺寸、步数，异步调用 `generate`、处理取消和保存 PNG；通过系统共享面板导出结果。
+- 用户下载的任意 `.ckpt`、`.safetensors` 不一定是完整生图模型。尚未实现通用原始 SD/FLUX 权重转换或 LoRA 绑定；不执行 PyTorch pickle 内容。
+- 第三方 LGPL 许可和组件出处保留在 App 第三方声明，源码及构建方式保持公开。
+
+## MediaGenerationKit：原始调研与边界
 
 上游[包清单](https://github.com/drawthingsai/media-generation-kit/blob/8868a9685d9c299816f43ef53efd455ffca437f0/Package.swift)声明 iOS 16+，通过固定 revision 依赖 `draw-things-community`。它不是不存在的占位 SDK；公开 API 包括 `MediaGenerationPipeline.fromPretrained`、`.local(directory:)`、生成进度与结果写入、`MediaGenerationEnvironment` 的模型解析/下载，以及本地转换用 `LoRAImporter`。[官方 README](https://github.com/drawthingsai/media-generation-kit/blob/8868a9685d9c299816f43ef53efd455ffca437f0/README.md)。
 
-本轮不把未经验证的依赖、模型和下载转换链路塞进主 App。上游示例中的 `flux_2_klein_4b_q8p.ckpt` 属于其模型体系，不能据此推断任意同扩展名的社区 Checkpoint、SDXL、Z-Image、Krea 或 LoKr 都能加载。上游说明采用 LGPLv3，接入时需要保留相应许可与第三方声明并确认实际分发方式。
+此前调研阶段未接入；本次已增加最小本地 Checkpoint 生图管线，但仍不能把它理解为任意格式通用的转换器。上游示例中的 `flux_2_klein_4b_q8p.ckpt` 属于其模型体系，不能据此推断任意同扩展名的社区 Checkpoint、SDXL、Z-Image、Krea 或 LoKr 都能加载。上游说明采用 LGPLv3，接入时需要保留相应许可与第三方声明并确认实际分发方式。
 
 下一步用固定版本接入**一个**上游支持的模型，获取完整依赖，在真机完成本地加载 → 生成 → 取消 → 保存 → 释放内存。先测该架构的加载/采样/VAE 解码峰值，再开放兼容社区模型。LoRA 必须以实际文件验证转换及效果；LoKr 仍是研究项。
 

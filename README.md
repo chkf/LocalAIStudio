@@ -2,7 +2,15 @@
 
 A lightweight native iOS app for on-device AI, model files and device monitoring, built with SwiftUI and native Liquid Glass controls.
 
-**Current implementation:** model management, the native **System** dashboard, appearance settings, LiteRT-LM text inference and a llama.cpp GGUF text path. **Gemma 4 E4B has not been verified on a physical iPhone in this project.** Image generation and system extensions remain planned.
+**Current implementation:** native System, model management, LiteRT-LM/GGUF/MLX text routing and a MediaGenerationKit Checkpoint image generation path. The user has verified a 3.66 GB LiteRT-LM model import and one generated reply on an iPhone; the newer GGUF, MLX and image pipelines still require device testing. System extensions remain planned.
+
+## Safetensors and Checkpoint support in 0.4.0 (6)
+
+- **MLX Swift LM:** Import a *complete model folder* from Files using "导入 MLX 模型文件夹". The folder must contain `config.json` (with a supported `model_type`), `tokenizer.json` and one or more `.safetensors` files. It is stored atomically and appears beside LiteRT-LM and GGUF in AI chat. MLX Swift LM 3.32.3 handles local model/tokenizer loading and streaming on Apple Metal; Chat Settings sampling and system prompt carry through. A lone Safetensors file or arbitrary PyTorch repository is **not** a runnable model.
+- **Local image generation:** The 生图 tab now offers prompt/negative prompt, image size, steps, cancellation, PNG output and the system share sheet. The backend is MediaGenerationKit, pinned to `37e0b700...` and licensed LGPL-3.0. It attempts to resolve **supported Draw Things checkpoints** already imported in the model library, while additional companion resources may still be required. Unsupported arbitrary PyTorch/Stable Diffusion `.ckpt` or raw diffusion `.safetensors` should fail explicitly instead of pretending to generate.
+- The model library distinguishes complete MLX model bundles, standalone `.safetensors` weight files and image Checkpoints. Folder imports reject symbolic links and incomplete manifests; the user's original documents are preserved.
+- Only one heavyweight chat or image task runs at a time. Switching between image generation and chat requests cancellation/unloading of the other runtime.
+- This is **a source and integration milestone**, not a real-device compatibility claim. Actual image checkpoints, the MLX model architectures and peak memory have not yet been tested on the target iPhone. No weight files are redistributed.
 
 ## GGUF / DeepSeek support in 0.3.0 (5)
 
@@ -41,7 +49,7 @@ The previous simulator tests used tiny files inside the app's exposed Debug Docu
 - Public HTTPS/Hugging Face `resolve` links support progress, pause/cancel and conditional resume. Repository pages, authenticated repositories and CivitAI parsing are not implemented. Backgrounding pauses downloads. Continuation depends on the server and retained temporary data.
 - The official pinned LiteRT-LM Swift package provides text loading, streaming, cancellation, unloading and conversation/input recovery. Native initialization itself is not immediately cancellable. One heavy task runs at a time; dynamic context is capped at 2,048 tokens and output at 512. Backgrounding requests cancellation/unload, not continued inference.
 - Model load timing and engine-reported TTFT/tokens/s are recorded when available. File size is not treated as peak RAM; iOS can terminate a process before a memory warning.
-- Image input, direct audio-to-model input, separately downloaded Kokoro/Parakeet engines, actual local image generation, image history, applied LoRA/LoKr, WidgetKit, App Intents, Live Activities and continuous cross-app monitoring are **not implemented**. Native device dictation and speech playback are separate from model audio input.
+- Image-to-chat input, direct audio-to-model input, separately downloaded Kokoro/Parakeet engines, image history/gallery, applied LoRA/LoKr, arbitrary Checkpoint conversion, WidgetKit, App Intents, Live Activities and continuous cross-app monitoring are **not implemented**. Native device dictation and speech playback are separate from model audio input.
 
 ## Build and verification
 

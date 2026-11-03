@@ -6,10 +6,12 @@ enum ModelFormat: String, Codable, Sendable, CaseIterable {
     case tflite = "TFLite"
     case gguf = "GGUF"
     case safetensors = "Safetensors"
+    case mlxBundle = "MLX model folder"
     case checkpoint = "Checkpoint"
     case binary = "Binary"
 
-    var supportsTextGeneration: Bool { self == .litertLM || self == .gguf }
+    var supportsTextGeneration: Bool { self == .litertLM || self == .gguf || self == .mlxBundle }
+    var supportsImageGeneration: Bool { self == .checkpoint }
 
     var fileExtension: String {
         switch self {
@@ -18,6 +20,7 @@ enum ModelFormat: String, Codable, Sendable, CaseIterable {
         case .tflite: "tflite"
         case .gguf: "gguf"
         case .safetensors: "safetensors"
+        case .mlxBundle: "mlx"
         case .checkpoint: "ckpt"
         case .binary: "bin"
         }
@@ -42,7 +45,16 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
         if format == .gguf {
             return "可尝试用 llama.cpp 加载单文件 GGUF 文本模型；架构、聊天模板及内存需求需实际验证。"
         }
-        return "当前未接入此格式的推理引擎，仅可存储与管理。适配器还需匹配的基础模型。"
+        if format == .mlxBundle {
+            return "可尝试用 MLX Swift LM 加载本地模型目录；需完整的 config、tokenizer 与 Safetensors 权重，模型架构须受 MLX 支持。"
+        }
+        if format == .checkpoint {
+            return "可尝试通过 MediaGenerationKit 使用支持的生图 Checkpoint；仅凭 .ckpt 扩展名不代表模型兼容。"
+        }
+        if format == .safetensors {
+            return "独立 Safetensors 只是权重。语言模型需连同配置、分词器作为模型文件夹导入；生图权重需兼容转换。"
+        }
+        return "当前未接入此格式的推理引擎，仅可存储与管理。适配器还需匹配的基础模型."
     }
 }
 
@@ -65,7 +77,7 @@ enum ModelFileError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedFile:
-            "请选择单个模型文件：litertlm、task、tflite、gguf、safetensors、ckpt 或 bin。暂不支持文件夹或压缩包。"
+            "请选择模型文件（litertlm、gguf、safetensors、ckpt 等），或使用“导入 MLX 文件夹”选择包含配置和权重的目录。"
         case .invalid(let detail): "模型文件无效：\(detail)"
         case .headerTooLarge: "模型元数据超过 8 MiB 检查上限，未导入。请使用受支持的模型文件。"
         case .notEnoughSpace: "可用存储空间不足，无法导入此模型。"

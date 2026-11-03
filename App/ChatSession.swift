@@ -300,12 +300,22 @@ private actor TextRuntime {
     private var engine: Engine?
     private var conversation: Conversation?
     private let gguf = GGUFTextRuntime()
+    private let mlx = MLXTextRuntime()
     private var currentFormat: ModelFormat?
     private var activeMessageID: UUID?
     private(set) var backendName = ""
 
     func load(fileURL: URL, format: ModelFormat, history: [ChatMessage], options: ChatPreferences) async throws -> Double {
         await unload()
+        if format == .mlxBundle {
+            guard options.backend != "cpu" else { throw ChatError.unsupportedMLXCPU }
+            guard !options.enableSpeculativeDecoding else { throw ChatError.unsupportedSpeculativeDecoding }
+            guard !options.enableThinking else { throw ChatError.unsupportedMLXThinking }
+            let elapsed = try await mlx.load(directory: fileURL, options: options)
+            currentFormat = .mlxBundle
+            backendName = "MLX Metal"
+            return elapsed
+        }
         if format == .gguf {
             if options.enableSpeculativeDecoding { throw ChatError.unsupportedSpeculativeDecoding }
             let elapsed = try await gguf.load(fileURL: fileURL, history: history, options: options)
@@ -346,6 +356,9 @@ private actor TextRuntime {
         if currentFormat == .gguf {
             return await gguf.stream(prompt: prompt, history: history, maxOutputTokens: maxOutputTokens)
         }
+        if currentFormat == .mlxBundle {
+            return await mlx.stream(prompt: prompt, history: history, maxOutputTokens: maxOutputTokens)
+        }
         let conversation = conversation!
         return AsyncThrowingStream { continuation in
             Task {
@@ -359,14 +372,16 @@ private actor TextRuntime {
         }
     }
 
-    func cancel(messageID: UUID) throws {
+    func cancel(messageID: UUID) async throws {
         guard activeMessageID == messageID else { return }
         if currentFormat == .gguf { gguf.cancel() }
+        else if currentFormat == .mlxBundle { await mlx.cancel() }
         else { try conversation?.cancel() }
     }
 
     func unload() async {
         await gguf.unload()
+        await mlx.unload()
         conversation = nil
         engine = nil
         currentFormat = nil
@@ -376,6 +391,12 @@ private actor TextRuntime {
 
     func metrics() async throws -> Metrics {
         defer { activeMessageID = nil }
+        if currentFormat == .mlxBundle {
+            let values = await mlx.metrics()
+            return Metrics(firstTokenSeconds: values?.firstTokenSeconds,
+                           tokensPerSecond: values?.tokensPerSecond,
+                           outputTokens: values?.outputTokens)
+        }
         if currentFormat == .gguf {
             let values = await gguf.metrics()
             return Metrics(firstTokenSeconds: values?.firstTokenSeconds,
@@ -421,7 +442,7 @@ private actor TextRuntime {
 }
 
 private enum ChatError: LocalizedError {
-    case noMemoryBudget, unreadableArchive, notTextModel, unsupportedBackend, unsupportedSpeculativeDecoding
+    case noMemoryBudget, unreadableArchive, notTextModel, unsupportedBackend, unsupportedSpeculativeDecoding, unsupportedMLXCPU, unsupportedMLXThinking
 
     var errorDescription: String? {
         switch self {
@@ -429,7 +450,9 @@ private enum ChatError: LocalizedError {
         case .unreadableArchive: "原对话文件无法读取。为避免覆盖，请先确认清空对话。"
         case .notTextModel: "该 LiteRT-LM 文件不是支持文本输入的语言模型。"
         case .unsupportedBackend: "该模型未提供可在此 App 使用的 CPU 或 Metal 后端。"
-        case .unsupportedSpeculativeDecoding: "GGUF 后端暂未接入推测解码，请在模型配置中关闭后重试。"
+        case .unsupportedSpeculativeDecoding: "当前模型后端未接入推测解码，请关闭该选项后重试。"
+        case .unsupportedMLXCPU: "MLX 后端使用 Apple Metal，不支持强制 CPU，请将加速器设为自动或 GPU。"
+        case .unsupportedMLXThinking: "当前 MLX 后端使用模型自带的推理模式，不能通过此开关强制开启思考。请关闭后重试。"
         }
     }
 }

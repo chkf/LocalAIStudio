@@ -4,6 +4,7 @@ struct ModelsPage: View {
     @Environment(ModelLibrary.self) private var library
     @Environment(ChatSession.self) private var chat
     @State private var importing = false
+    @State private var importingFolders = false
     @State private var downloading = false
     @State private var query = ""
     @State private var pendingDelete: LocalModel?
@@ -39,6 +40,9 @@ struct ModelsPage: View {
                                     .buttonStyle(.borderedProminent)
                                     .disabled(library.isWriting)
                                     .accessibilityIdentifier("importModel")
+                                Button("导入 MLX 模型文件夹") { importingFolders = true }
+                                    .disabled(library.isWriting)
+                                    .accessibilityIdentifier("importMLXFolder")
                             }
                         }
                         .listRowBackground(Color.clear)
@@ -96,6 +100,9 @@ struct ModelsPage: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("添加模型", systemImage: "plus") {
                         Button("从文件导入", systemImage: "folder") { importing = true }
+                        Button("导入 MLX 模型文件夹", systemImage: "folder.badge.plus") { importingFolders = true }
+                            .disabled(library.isWriting)
+                            .accessibilityIdentifier("importMLXFolder")
                             .disabled(library.isWriting)
                             .accessibilityIdentifier("importModel")
                         Button("从 HTTPS 下载", systemImage: "arrow.down.circle") { downloading = true }
@@ -109,6 +116,12 @@ struct ModelsPage: View {
                 ModelDocumentPicker { urls in
                     importing = false
                     // UIKit returns sandbox copies only after the user confirms Open.
+                    if !urls.isEmpty { Task { await library.importFiles(urls, copies: true) } }
+                }
+            }
+            .sheet(isPresented: $importingFolders) {
+                ModelDocumentPicker(contentTypes: [.folder]) { urls in
+                    importingFolders = false
                     if !urls.isEmpty { Task { await library.importFiles(urls, copies: true) } }
                 }
             }

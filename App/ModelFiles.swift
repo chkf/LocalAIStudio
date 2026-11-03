@@ -31,10 +31,19 @@ actor ModelFiles {
             do {
                 let metadata = folder.appendingPathComponent("metadata.json")
                 let model = try JSONDecoder().decode(LocalModel.self, from: Data(contentsOf: metadata))
-                let values = try fileURL(for: model).resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
-                guard model.id == id, values.isRegularFile == true, values.isSymbolicLink != true,
-                      let size = values.fileSize, Int64(size) == model.byteCount else {
+                let file = fileURL(for: model)
+                let values = try file.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey])
+                guard model.id == id, values.isSymbolicLink != true else {
                     throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
+                }
+                if model.format == .mlxBundle {
+                    guard values.isDirectory == true, try inspectMLXFolder(file).size == model.byteCount else {
+                        throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
+                    }
+                } else {
+                    guard values.isRegularFile == true, let size = values.fileSize, Int64(size) == model.byteCount else {
+                        throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
+                    }
                 }
                 return model
             } catch {
@@ -56,7 +65,74 @@ actor ModelFiles {
     /// Only the native picker's sandbox copy is consumed; never the user's source file.
     func importPickerCopy(from source: URL) throws -> LocalModel {
         try checkPickerCopy(source)
+        let values = try source.resourceValues(forKeys: [.isDirectoryKey])
+        if values.isDirectory == true { return try storeMLXFolder(from: source) }
         return try storeFile(from: source, name: nil, transfer: .move)
+    }
+
+    private func storeMLXFolder(from source: URL) throws -> LocalModel {
+        let inspection = try inspectMLXFolder(source)
+        let id = UUID()
+        let staging = directory.appendingPathComponent(".import-\(id.uuidString)", isDirectory: true)
+        try files.createDirectory(at: staging, withIntermediateDirectories: false)
+        do {
+            try Task.checkCancellation()
+            try files.moveItem(at: source, to: staging.appendingPathComponent("model.mlx", isDirectory: true))
+            let model = LocalModel(id: id, name: source.lastPathComponent, byteCount: inspection.size,
+                                   importedAt: .now, format: .mlxBundle, architecture: inspection.architecture,
+                                   quantization: nil, adapter: nil,
+                                   validationNote: "已保存完整 MLX 模型目录；权重与架构兼容性需实际加载验证。")
+            try JSONEncoder().encode(model).write(
+                to: staging.appendingPathComponent("metadata.json"), options: .atomic)
+            try Task.checkCancellation()
+            try files.moveItem(at: staging, to: directory.appendingPathComponent(id.uuidString, isDirectory: true))
+            return model
+        } catch {
+            let failure = error
+            do { try files.removeItem(at: staging) }
+            catch { throw ModelFileError.cleanupFailed("\(failure.localizedDescription)；\(error.localizedDescription)") }
+            throw failure
+        }
+    }
+
+    private func inspectMLXFolder(_ folder: URL) throws -> (size: Int64, architecture: String) {
+        let config = folder.appendingPathComponent("config.json")
+        let metadata = try config.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .isSymbolicLinkKey])
+        guard metadata.isRegularFile == true, metadata.isSymbolicLink != true,
+              let length = metadata.fileSize, length <= 4 * 1024 * 1024,
+              let object = try JSONSerialization.jsonObject(with: Data(contentsOf: config)) as? [String: Any],
+              let architecture = object["model_type"] as? String else {
+            throw ModelFileError.invalid("MLX 模型目录缺少有效的 config.json / model_type。")
+        }
+        guard files.fileExists(atPath: folder.appendingPathComponent("tokenizer.json").path) else {
+            throw ModelFileError.invalid("MLX 模型目录缺少 tokenizer.json。")
+        }
+        guard let enumerator = files.enumerator(at: folder, includingPropertiesForKeys:
+            [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]) else {
+            throw ModelFileError.invalid("无法读取模型目录。")
+        }
+        var total: Int64 = 0
+        var weights = false
+        for case let file as URL in enumerator {
+            try Task.checkCancellation()
+            let values = try file.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey,
+                                                            .isSymbolicLinkKey, .fileSizeKey])
+            guard values.isSymbolicLink != true else {
+                throw ModelFileError.invalid("模型目录包含符号链接，已拒绝导入。")
+            }
+            if values.isDirectory == true { continue }
+            guard values.isRegularFile == true, let size = values.fileSize else {
+                throw ModelFileError.invalid("模型目录中包含不可读取的文件。")
+            }
+            let (sum, overflow) = total.addingReportingOverflow(Int64(size))
+            guard !overflow else { throw ModelFileError.invalid("模型目录大小无效。") }
+            total = sum
+            if file.pathExtension.lowercased() == "safetensors" { weights = true }
+        }
+        guard weights else {
+            throw ModelFileError.invalid("目录缺少 Safetensors 模型权重。")
+        }
+        return (total, architecture)
     }
 
     func discardPickerCopies(_ urls: [URL]) throws {

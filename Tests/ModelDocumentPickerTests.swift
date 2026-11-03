@@ -25,6 +25,15 @@ final class ModelDocumentPickerTests: XCTestCase {
     }
 
     @MainActor
+    func testMLXFolderPickerUsesNativeCopyMode() {
+        let coordinator = ModelDocumentPicker(contentTypes: [.folder]) { _ in }.makeCoordinator()
+        let picker = ModelDocumentPicker.makePicker(delegate: coordinator, types: [.folder])
+        XCTAssertEqual(picker.documentPickerMode, .import)
+        XCTAssertTrue(picker.allowsMultipleSelection)
+        XCTAssertTrue(picker.delegate === coordinator)
+    }
+
+    @MainActor
     func testSelectionForwardsEveryConfirmedCopy() {
         let urls = [URL(fileURLWithPath: "/tmp/first.litertlm"), URL(fileURLWithPath: "/tmp/second.gguf")]
         var selections: [[URL]] = []

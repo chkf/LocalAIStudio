@@ -3,15 +3,16 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct ModelDocumentPicker: UIViewControllerRepresentable {
+    var contentTypes: [UTType] = [.data]
     let onSelection: ([URL]) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onSelection: onSelection)
     }
 
-    static func makePicker(delegate: UIDocumentPickerDelegate) -> UIDocumentPickerViewController {
+    static func makePicker(delegate: UIDocumentPickerDelegate, types: [UTType] = [.data]) -> UIDocumentPickerViewController {
         // Import a sandbox copy instead of asking a provider for in-place access.
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
         // Keep selection and confirmation separate. All confirmed files are imported.
         picker.allowsMultipleSelection = true
         picker.shouldShowFileExtensions = true
@@ -20,7 +21,7 @@ struct ModelDocumentPicker: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        Self.makePicker(delegate: context.coordinator)
+        Self.makePicker(delegate: context.coordinator, types: contentTypes)
     }
 
     func updateUIViewController(_ picker: UIDocumentPickerViewController, context: Context) {

@@ -44,9 +44,11 @@ private enum Page: Hashable { case chat, generate, device, models }
 private struct MainView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("chatModelID") private var selectedModelID = ""
+    @AppStorage("imageModelID") private var selectedImageModelID = ""
     @State private var selection: Page = .chat
     @State private var library = ModelLibrary()
     @State private var chat = ChatSession()
+    @State private var generator = ImageGenerationSession()
     @State private var monitor = DeviceMonitor()
 
     var body: some View {
@@ -62,16 +64,23 @@ private struct MainView: View {
             }
             Tab("模型", systemImage: "square.stack.3d.up", value: Page.models) {
                 ModelsPage { model in
-                    Task {
-                        await chat.unload()
-                        selectedModelID = model.id.uuidString
-                        selection = .chat
+                    if model.format.supportsImageGeneration {
+                        selectedImageModelID = model.id.uuidString
+                        selection = .generate
+                    } else {
+                        Task {
+                            await generator.stop()
+                            await chat.unload()
+                            selectedModelID = model.id.uuidString
+                            selection = .chat
+                        }
                     }
                 }
             }
         }
         .environment(library)
         .environment(chat)
+        .environment(generator)
         .environment(monitor)
         .task { await library.open() }
         .onChange(of: scenePhase, initial: true) { _, phase in
@@ -79,6 +88,7 @@ private struct MainView: View {
             else { monitor.stop() }
             if phase == .background {
                 library.cancelImport()
+                generator.cancel()
                 chat.saveDraft()
                 chat.cancel()
                 Task { await chat.unload() }
@@ -89,6 +99,7 @@ private struct MainView: View {
         }
         .onDisappear { monitor.stop() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            generator.cancel()
             chat.cancel()
             Task { await chat.unload() }
         }
@@ -191,23 +202,5 @@ private struct SettingsPage: View {
         }
         do { return try String(contentsOf: url, encoding: .utf8) }
         catch { return "无法读取许可文件：\(error.localizedDescription)" }
-    }
-}
-
-private struct GeneratePage: View {
-    let openModels: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label("本地生图尚未接入", systemImage: "photo.badge.plus")
-            } description: {
-                Text("当前版本可以导入和检查模型文件。图片生成将在完成引擎与实际模型验证后开放。")
-            } actions: {
-                Button("管理模型", action: openModels)
-                    .buttonStyle(.borderedProminent)
-            }
-            .navigationTitle("生图")
-        }
     }
 }

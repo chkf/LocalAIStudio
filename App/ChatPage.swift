@@ -5,6 +5,7 @@ import os
 struct ChatPage: View {
     @Environment(ModelLibrary.self) private var library
     @Environment(ChatSession.self) private var chat
+    @Environment(ImageGenerationSession.self) private var images
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("chatModelID") private var selectedModelID = ""
@@ -217,6 +218,7 @@ struct ChatPage: View {
             do {
                 try Task.checkCancellation()
                 guard UIApplication.shared.applicationState == .active else { return }
+                await images.stop()
                 await chat.send(model: model, fileURL: try library.fileURL(for: model))
             } catch is CancellationError {
                 return

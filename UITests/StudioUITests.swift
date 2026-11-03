@@ -34,7 +34,7 @@ final class StudioUITests: XCTestCase {
     }
 
     @MainActor
-    func testNavigationAndUnsupportedGeneration() throws {
+    func testNavigationAndGenerationEntry() throws {
         let app = XCUIApplication()
         app.launch()
         let input = app.descendants(matching: .any)["chatInput"]
@@ -44,7 +44,7 @@ final class StudioUITests: XCTestCase {
         snapshot(app, "AI-light")
 
         app.tabBars.buttons["生图"].tap()
-        XCTAssertTrue(app.staticTexts["本地生图尚未接入"].exists)
+        XCTAssertTrue(app.staticTexts["添加生图 Checkpoint"].exists)
         XCTAssertFalse(app.buttons["settingsButton"].exists)
         app.buttons["管理模型"].tap()
         XCTAssertTrue(app.navigationBars["模型"].waitForExistence(timeout: 5))
