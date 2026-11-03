@@ -54,8 +54,8 @@ jobs:
               info = plistlib.loads(ipa.read(app + 'Info.plist'))
               for key in ('CFBundleVersion', 'CFBundleShortVersionString'):
                   assert info.get(key), f'Missing {key} from app bundle'
-              for key in ('CFBundleDisplayName', 'CFBundleName'):
-                  assert info.get(key) == 'AI Studio', f'Incorrect {key}: {info.get(key)}'
+              assert info.get('CFBundleDisplayName') == 'AI Studio', 'Incorrect visible app name'
+              assert info.get('CFBundleName') == 'LocalAIStudio', 'Unexpected internal product name'
               assert info.get('LSSupportsOpeningDocumentsInPlace') is True
               assert not info.get('UIFileSharingEnabled', False), 'Release must not expose test fixtures'
               assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
@@ -161,7 +161,8 @@ jobs:
               info = plistlib.loads((products / configuration / 'LocalAIStudio.app/Info.plist').read_bytes())
               assert info.get('LSSupportsOpeningDocumentsInPlace') is True
               assert not info.get('UIFileSharingEnabled', False)
-              assert info.get('CFBundleDisplayName') == info.get('CFBundleName') == 'AI Studio'
+              assert info.get('CFBundleDisplayName') == 'AI Studio'
+              assert info.get('CFBundleName') == 'LocalAIStudio'
           print('Debug and Release use the same document configuration and app names.')
           PY
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
