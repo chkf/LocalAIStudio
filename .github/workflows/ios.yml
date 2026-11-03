@@ -58,6 +58,9 @@ jobs:
               assert info.get('CFBundleName') == 'LocalAIStudio', 'Unexpected internal product name'
               assert info.get('LSSupportsOpeningDocumentsInPlace') is True
               assert not info.get('UIFileSharingEnabled', False), 'Release must not expose test fixtures'
+              assert info.get('NSMicrophoneUsageDescription'), 'Missing microphone permission description'
+              assert info.get('NSSpeechRecognitionUsageDescription'), 'Missing speech-recognition permission description'
+              assert ipa.getinfo(app + 'en.lproj/Localizable.strings').file_size > 0, 'Missing English app localization'
               assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
               assert ipa.getinfo(app + 'Frameworks/CLiteRTLM.framework/CLiteRTLM').file_size > 0
               primary_icon = info.get('CFBundleIcons', {}).get('CFBundlePrimaryIcon', {})

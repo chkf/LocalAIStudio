@@ -4,6 +4,22 @@ import UIKit
 @main
 struct LocalAIStudioApp: App {
     @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("appLanguage") private var language = "zh-Hans"
+    @AppStorage("themeColor") private var themeColor = "green"
+
+    private var preferredLocale: Locale {
+        language == "system" ? .current : Locale(identifier: language)
+    }
+
+    private var accent: Color {
+        switch themeColor {
+        case "blue": .blue
+        case "purple": .purple
+        case "orange": .orange
+        case "pink": .pink
+        default: .green
+        }
+    }
 
     private var preferredScheme: ColorScheme? {
         switch appearance {
@@ -17,6 +33,8 @@ struct LocalAIStudioApp: App {
         WindowGroup {
             MainView()
                 .preferredColorScheme(preferredScheme)
+                .environment(\.locale, preferredLocale)
+                .tint(accent)
         }
     }
 }
@@ -52,7 +70,6 @@ private struct MainView: View {
                 }
             }
         }
-        .tint(.green)
         .environment(library)
         .environment(chat)
         .environment(monitor)
@@ -108,6 +125,8 @@ private struct SettingsPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("appLanguage") private var language = "zh-Hans"
+    @AppStorage("themeColor") private var themeColor = "green"
 
     var body: some View {
         NavigationStack {
@@ -120,6 +139,20 @@ private struct SettingsPage: View {
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("appearancePicker")
+                    Picker("语言", selection: $language) {
+                        Text("跟随系统").tag("system")
+                        Text("简体中文").tag("zh-Hans")
+                        Text("English").tag("en")
+                    }
+                    .accessibilityIdentifier("languagePicker")
+                    Picker("主题色", selection: $themeColor) {
+                        Text("绿色").tag("green")
+                        Text("蓝色").tag("blue")
+                        Text("紫色").tag("purple")
+                        Text("橙色").tag("orange")
+                        Text("粉色").tag("pink")
+                    }
+                    .accessibilityIdentifier("themeColorPicker")
                 }
                 Section {
                     LabeledContent("降低透明度", value: reduceTransparency ? "已开启" : "未开启")

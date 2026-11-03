@@ -16,6 +16,24 @@ final class StudioUITests: XCTestCase {
     }
 
     @MainActor
+    func testChatOptionsAndGlobalSettings() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["chatMicrophone"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["chatStatus"].exists)
+        app.buttons["对话选项"].tap()
+        app.buttons["模型配置"].tap()
+        XCTAssertTrue(app.navigationBars["对话设置"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["systemPromptEditor"].exists)
+        XCTAssertTrue(app.buttons["applyChatSettings"].exists)
+        app.buttons["取消"].tap()
+        app.tabBars.buttons["模型"].tap()
+        app.buttons["settingsButton"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["languagePicker"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["themeColorPicker"].exists)
+    }
+
+    @MainActor
     func testNavigationAndUnsupportedGeneration() throws {
         let app = XCUIApplication()
         app.launch()

@@ -12,7 +12,7 @@ Google 提供官方 SwiftPM 产品 `LiteRTLM`，最低 iOS 15，Swift API 标为
 
 - 用户导入/下载的 `.litertlm` 文件交给原生 `ModelInfo` 再验证文本模态和后端。下载或识别文件头不等于通过运行验证。
 - 单个 `TextRuntime` actor 持有原生 Engine/Conversation，加载、流式初始化及释放在 UI actor 之外执行。仅使用模型声明的 Metal 或 CPU 后端。
-- 同时只有一个生成任务。动态上下文最多 2,048 token，单次输出最多 512 token，暂不启用 thinking、视觉、音频或 LoRA。已有对话不做静默截断；超出引擎上下文会明确报错。
+- 同时只有一个生成任务。默认动态上下文 2,048 token、单轮输出 512 token；现在可配置单轮输出上限、采样参数、CPU/Metal 后端、系统提示词，以及模型支持时的 thinking/推测解码。动态上下文大小会随输出预算调整但不超过模型声明的上限；超出引擎上下文会报错，不做静默截断。视觉输入、模型原生音频输入和 LoRA 尚未接入。iOS 系统语音转写/朗读不等于 LiteRT-LM 音频模型。
 - 取消调用原生 `Conversation.cancel()`，等待流的终止回调再卸载。原生初始化没有取消 API，因此加载中停止需等待初始化返回。
 - 上游没有显式 Engine.close；必须先释放 Conversation，再释放 Engine，原生对象由其 `deinit` 销毁。[生命周期源码](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.1/swift/Engine.swift)、[流与取消源码](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.1/swift/Conversation.swift)。
 - 加载耗时使用单调时钟测量。TTFT、tokens/s 和输出 token 数只采用引擎实际返回的 benchmark 数据；没有数据时留空，不把流式文本块当 token。

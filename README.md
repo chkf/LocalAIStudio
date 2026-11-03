@@ -4,6 +4,14 @@ A lightweight native iOS app for on-device AI, model files and device monitoring
 
 **Current implementation:** model management, the native **System** dashboard, appearance settings and a LiteRT-LM text inference path. **Gemma 4 E4B has not been verified on a physical iPhone in this project.** Image generation and system extensions remain planned.
 
+## Changes in 0.2.0 (4)
+
+- Chat Settings (the AI page's options menu) apply real LiteRT-LM controls: output-token limit, Top-K/Top-P, temperature, supported CPU/Metal backend selection, optional thinking, optional speculative decoding, and a system prompt. These settings persist across launches. Changing the settings unloads the active model so the next request uses the new configuration. Not all models support thinking, speculative decoding or every accelerator; unsupported requests surface the engine error.
+- Audio uses Apple's on-device APIs rather than pretending bundled Kokoro/Parakeet models exist: tap the microphone to transcribe into the message field with permission, choose a locale and system voice, and enable optional automatic spoken replies or speak one reply from its context menu. Recognition requires on-device support for the selected locale. Recording starts only after explicit user action.
+- Settings in the Models tab now include a Chinese/English app language selector and a five-color accent selector. Chinese remains the default; English localization covers common navigation, model, chat, settings and device controls.
+- Removed the always-visible line under the chat log, including "model unloaded" and completed status messages. Task state remains available in System.
+- Visual token budget is not exposed before image input is implemented. Neither audio-model selection nor image input is silently simulated.
+
 ## Changes in 0.1.2 (3)
 
 - The home-screen display name is **AI Studio**. The repository, internal product name and bundle identifier remain unchanged so existing installations can retain their data.
@@ -25,7 +33,7 @@ The previous simulator tests used tiny files inside the app's exposed Debug Docu
 - Public HTTPS/Hugging Face `resolve` links support progress, pause/cancel and conditional resume. Repository pages, authenticated repositories and CivitAI parsing are not implemented. Backgrounding pauses downloads. Continuation depends on the server and retained temporary data.
 - The official pinned LiteRT-LM Swift package provides text loading, streaming, cancellation, unloading and conversation/input recovery. Native initialization itself is not immediately cancellable. One heavy task runs at a time; dynamic context is capped at 2,048 tokens and output at 512. Backgrounding requests cancellation/unload, not continued inference.
 - Model load timing and engine-reported TTFT/tokens/s are recorded when available. File size is not treated as peak RAM; iOS can terminate a process before a memory warning.
-- Image/audio input, actual local image generation, image history, applied LoRA/LoKr, WidgetKit, App Intents, Live Activities and continuous cross-app monitoring are **not implemented**.
+- Image input, direct audio-to-model input, separately downloaded Kokoro/Parakeet engines, actual local image generation, image history, applied LoRA/LoKr, WidgetKit, App Intents, Live Activities and continuous cross-app monitoring are **not implemented**. Native device dictation and speech playback are separate from model audio input.
 
 ## Build and verification
 

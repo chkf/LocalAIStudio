@@ -26,6 +26,20 @@ struct InferenceRecord: Identifiable, Codable, Sendable {
     let outputTokens: Int?
 }
 
+struct ChatPreferences: Codable, Equatable, Sendable {
+    var maxOutputTokens = 512
+    var topK = 40
+    var topP = 0.95
+    var temperature = 0.7
+    var backend = "auto"
+    var enableThinking = false
+    var enableSpeculativeDecoding = false
+    var systemPrompt = ""
+    var autoSpeak = false
+    var speechLanguage = "zh-CN"
+    var voiceIdentifier = ""
+}
+
 private struct ChatArchive: Codable {
     var messages: [ChatMessage] = []
     var draft = ""
@@ -39,6 +53,7 @@ private struct ChatArchive: Codable {
 @Observable
 final class ChatSession {
     private(set) var messages: [ChatMessage] = []
+    private(set) var preferences = ChatPreferences()
     var draft = ""
     private(set) var isBusy = false
     private(set) var loadedModelID: UUID?
@@ -54,6 +69,7 @@ final class ChatSession {
 
     @ObservationIgnored private let runtime = TextRuntime()
     @ObservationIgnored private let archiveURL: URL
+    @ObservationIgnored private let preferencesURL: URL
     @ObservationIgnored private var operation: Task<Void, Never>?
     @ObservationIgnored private var unloadOperation: Task<Void, Never>?
     @ObservationIgnored private var cancellationRequested = false
@@ -64,6 +80,7 @@ final class ChatSession {
 
     init(directory: URL = URL.applicationSupportDirectory.appendingPathComponent("Chat", isDirectory: true)) {
         archiveURL = directory.appendingPathComponent("conversation.json")
+        preferencesURL = directory.appendingPathComponent("preferences.json")
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: archiveURL.path) {
@@ -87,6 +104,21 @@ final class ChatSession {
             archiveIsReadable = false
             errorMessage = "无法读取对话记录，原文件已保留。清空对话后可重新开始。\n\(error.localizedDescription)"
         }
+        if FileManager.default.fileExists(atPath: preferencesURL.path) {
+            do { preferences = try JSONDecoder().decode(ChatPreferences.self, from: Data(contentsOf: preferencesURL)) }
+            catch { errorMessage = "无法读取推理配置：\(error.localizedDescription)" }
+        }
+    }
+
+    func applyPreferences(_ newValue: ChatPreferences) async {
+        guard !isBusy else { return }
+        do {
+            try JSONEncoder().encode(newValue).write(to: preferencesURL, options: .atomic)
+            if preferences != newValue {
+                preferences = newValue
+                if loadedModelID != nil { await unload() }
+            }
+        } catch { errorMessage = "无法保存推理配置：\(error.localizedDescription)" }
     }
 
     func send(model: LocalModel, fileURL: URL) async {
@@ -98,6 +130,7 @@ final class ChatSession {
             return
         }
         let history = messages.filter { !$0.isInterrupted && !$0.text.isEmpty }
+        let options = preferences
         let user = ChatMessage(role: .user, text: prompt)
         messages.append(user)
         pendingPrompt = prompt
@@ -121,7 +154,7 @@ final class ChatSession {
         tokensPerSecond = nil
         metricsNote = nil
         let task = Task {
-            await self.generate(model: model, fileURL: fileURL, prompt: prompt, userID: user.id, history: history)
+            await self.generate(model: model, fileURL: fileURL, prompt: prompt, userID: user.id, history: history, options: options)
         }
         operation = task
         await task.value
@@ -179,7 +212,7 @@ final class ChatSession {
         catch { errorMessage = "未能保存对话：\(error.localizedDescription)" }
     }
 
-    private func generate(model: LocalModel, fileURL: URL, prompt: String, userID: UUID, history: [ChatMessage]) async {
+    private func generate(model: LocalModel, fileURL: URL, prompt: String, userID: UUID, history: [ChatMessage], options: ChatPreferences) async {
         let assistantID = UUID()
         defer {
             operation = nil
@@ -194,13 +227,13 @@ final class ChatSession {
                 status = "正在加载 \(model.name)"
                 loadedModelID = nil
                 loadSeconds = nil
-                loadSeconds = try await runtime.load(fileURL: fileURL, history: history)
+                loadSeconds = try await runtime.load(fileURL: fileURL, history: history, options: options)
                 loadedModelID = model.id
             }
             if cancellationRequested { throw CancellationError() }
             status = "正在生成"
             messages.append(ChatMessage(id: assistantID, role: .assistant, text: ""))
-            let stream = await runtime.stream(prompt: prompt, messageID: userID)
+            let stream = await runtime.stream(prompt: prompt, messageID: userID, maxOutputTokens: options.maxOutputTokens)
             if cancellationRequested { try await runtime.cancel(messageID: userID) }
             for try await chunk in stream {
                 if !cancellationRequested, let index = messages.firstIndex(where: { $0.id == assistantID }) {
@@ -269,10 +302,10 @@ private actor TextRuntime {
     private var activeMessageID: UUID?
     private(set) var backendName = ""
 
-    func load(fileURL: URL, history: [ChatMessage]) async throws -> Double {
+    func load(fileURL: URL, history: [ChatMessage], options: ChatPreferences) async throws -> Double {
         unload()
         let start = ContinuousClock.now
-        let configuration = try configuration(fileURL: fileURL)
+        let configuration = try configuration(fileURL: fileURL, backendPreference: options.backend, maxOutputTokens: options.maxOutputTokens)
         ExperimentalFlags.optIntoExperimentalAPIs()
         ExperimentalFlags.enableBenchmark = true
         let loadedEngine = Engine(engineConfig: configuration)
@@ -281,19 +314,26 @@ private actor TextRuntime {
         let initialMessages = history.map {
             Message($0.text, role: $0.role == .user ? .user : .model)
         }
+        let instruction = options.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         conversation = try await loadedEngine.createConversation(with: ConversationConfig(
+            systemMessage: instruction.isEmpty ? nil : Message(instruction, role: .system),
             initialMessages: initialMessages,
-            thinkingConfig: ThinkingConfig(enableThinking: false),
-            automaticToolCalling: false
+            samplerConfig: try SamplerConfig(
+                topK: options.topK, topP: Float(options.topP), temperature: Float(options.temperature)
+            ),
+            thinkingConfig: ThinkingConfig(enableThinking: options.enableThinking,
+                                           thinkingTokenBudget: options.enableThinking ? min(options.maxOutputTokens / 2, 512) : 0),
+            automaticToolCalling: false,
+            enableSpeculativeDecoding: options.enableSpeculativeDecoding
         ))
         backendName = configuration.backend == .gpu ? "Metal" : "CPU"
         let elapsed = start.duration(to: .now).components
         return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
     }
 
-    func stream(prompt: String, messageID: UUID) -> AsyncThrowingStream<Message, Error> {
+    func stream(prompt: String, messageID: UUID, maxOutputTokens: Int) -> AsyncThrowingStream<Message, Error> {
         activeMessageID = messageID
-        return conversation!.sendMessageStream(Message(prompt), maxOutputTokens: 512)
+        return conversation!.sendMessageStream(Message(prompt), maxOutputTokens: maxOutputTokens)
     }
 
     func cancel(messageID: UUID) throws {
@@ -317,16 +357,27 @@ private actor TextRuntime {
         )
     }
 
-    private func configuration(fileURL: URL) throws -> EngineConfig {
+    private func configuration(fileURL: URL, backendPreference: String, maxOutputTokens: Int) throws -> EngineConfig {
         let info = try ModelInfo(throwingModelPath: fileURL.path)
         guard info.isLlmModel(), info.inputModalities.text else { throw ChatError.notTextModel }
         let supported = info.supportedBackends(for: .text)
         let backend: Backend
-        if supported.contains(.gpu) { backend = .gpu }
-        else if supported.contains(.cpu) { backend = .cpu(threadCount: 4) }
-        else { throw ChatError.unsupportedBackend }
+        switch backendPreference {
+        case "gpu":
+            guard supported.contains(.gpu) else { throw ChatError.unsupportedBackend }
+            backend = .gpu
+        case "cpu":
+            guard supported.contains(.cpu) else { throw ChatError.unsupportedBackend }
+            backend = .cpu(threadCount: 4)
+        default:
+            if supported.contains(.gpu) { backend = .gpu }
+            else if supported.contains(.cpu) { backend = .cpu(threadCount: 4) }
+            else { throw ChatError.unsupportedBackend }
+        }
         let maximum = info.maxContextTokens()
-        let context = info.isDynamicContext() && maximum > 0 ? min(2048, maximum) : nil
+        // Reserve space for input as output limits increase, within the model's advertised maximum.
+        let preferredContext = max(2048, maxOutputTokens + 512)
+        let context = info.isDynamicContext() && maximum > 0 ? min(preferredContext, maximum) : nil
         let cache = URL.cachesDirectory.appendingPathComponent("LiteRT-LM", isDirectory: true)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         return try EngineConfig(

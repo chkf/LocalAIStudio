@@ -11,6 +11,8 @@ struct ChatPage: View {
     @State private var confirmingLoad = false
     @State private var confirmingClear = false
     @State private var sendTask: Task<Void, Never>?
+    @State private var showingChatSettings = false
+    @State private var speech = SpeechController()
     @FocusState private var messageFocused: Bool
     let openModels: () -> Void
 
@@ -44,6 +46,15 @@ struct ChatPage: View {
                                             .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                                         Text(message.text).textSelection(.enabled)
                                             .frame(maxWidth: .infinity, alignment: .leading)
+                                            .contextMenu {
+                                                if message.role == .assistant {
+                                                    Button("朗读", systemImage: "speaker.wave.2") {
+                                                        speech.speak(message.text, language: chat.preferences.speechLanguage,
+                                                                     voiceIdentifier: chat.preferences.voiceIdentifier)
+                                                    }
+                                                    Button("停止朗读", systemImage: "speaker.slash") { speech.stopSpeaking() }
+                                                }
+                                            }
                                         if message.isInterrupted {
                                             Text("已中断").font(.caption).foregroundStyle(.secondary)
                                         }
@@ -58,11 +69,6 @@ struct ChatPage: View {
                         .scrollDismissesKeyboard(.interactively)
                         .onChange(of: chat.messages.last?.text) { _, _ in scroll.scrollTo("end", anchor: .bottom) }
                     }
-                }
-                if !chat.status.isEmpty {
-                    Text(chat.status).font(.caption).foregroundStyle(.secondary)
-                        .padding(.horizontal).padding(.bottom, 8)
-                        .accessibilityIdentifier("chatStatus")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -81,6 +87,21 @@ struct ChatPage: View {
                         .lineLimit(1...6)
                         .focused($messageFocused)
                         .accessibilityIdentifier("chatInput")
+                    Button(speech.isRecording ? "结束语音输入" : "语音输入", systemImage: speech.isRecording ? "stop.circle.fill" : "mic") {
+                        if speech.isRecording { speech.stopTranscription() }
+                        else {
+                            messageFocused = false
+                            let existing = chat.draft
+                            Task {
+                                await speech.startTranscription(language: chat.preferences.speechLanguage) { result in
+                                    chat.draft = existing.isEmpty ? result : existing + " " + result
+                                }
+                            }
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("chatMicrophone")
                     if busy {
                         Button("停止", systemImage: "stop.fill") { stop() }
                             .labelStyle(.iconOnly).buttonStyle(.bordered)
@@ -106,6 +127,8 @@ struct ChatPage: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("对话选项", systemImage: "ellipsis") {
+                        Button("模型配置", systemImage: "slider.horizontal.3") { showingChatSettings = true }
+                            .disabled(busy)
                         Button("卸载模型", systemImage: "eject") { Task { await chat.unload() } }
                             .disabled(chat.loadedModelID == nil && !chat.isBusy)
                         Button("清空对话", systemImage: "trash", role: .destructive) { confirmingClear = true }
@@ -120,7 +143,27 @@ struct ChatPage: View {
             .confirmationDialog("清空当前对话？", isPresented: $confirmingClear, titleVisibility: .visible) {
                 Button("清空对话", role: .destructive) { Task { await chat.clear() } }
             }
-            .onDisappear { chat.saveDraft() }
+            .sheet(isPresented: $showingChatSettings) { ChatSettingsPage() }
+            .alert("语音输入", isPresented: Binding(
+                get: { speech.errorMessage != nil },
+                set: { if !$0 { speech.errorMessage = nil } }
+            )) {
+                Button("好") { speech.errorMessage = nil }
+            } message: {
+                Text(speech.errorMessage ?? "")
+            }
+            .onChange(of: chat.status) { _, status in
+                if status == "生成完成", chat.preferences.autoSpeak,
+                   let last = chat.messages.last, last.role == .assistant, !last.isInterrupted {
+                    speech.speak(last.text, language: chat.preferences.speechLanguage,
+                                 voiceIdentifier: chat.preferences.voiceIdentifier)
+                }
+            }
+            .onDisappear {
+                speech.stopTranscription()
+                speech.stopSpeaking()
+                chat.saveDraft()
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { stop() }
             }
