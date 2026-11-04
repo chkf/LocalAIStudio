@@ -7,6 +7,8 @@ struct GeneratePage: View {
     @Environment(ChatSession.self) private var chat
     @Environment(ImageGenerationSession.self) private var generator
     @AppStorage("imageModelID") private var selectedID = ""
+    private enum Field: Hashable { case prompt, negativePrompt }
+    @FocusState private var focusedField: Field?
     @State private var prompt = ""
     @State private var negativePrompt = ""
     @State private var size = 512
@@ -39,15 +41,34 @@ struct GeneratePage: View {
                     } else {
                         Picker("Checkpoint", selection: $selectedID) {
                             ForEach(supported) { model in
-                                Text(model.name).tag(model.id.uuidString)
+                                Text(model.title).tag(model.id.uuidString)
                             }
                         }
                         .accessibilityIdentifier("imageModelPicker")
+                        if let selectedModel {
+                            NavigationLink("模型与配套组件") { ImageModelSettingsPage(model: selectedModel) }
+                                .disabled(generator.isGenerating || library.isProcessing)
+                            Button("检查并下载配套资源") {
+                                focusedField = nil
+                                Task {
+                                    guard !library.isProcessing else { return }
+                                    await speech.stopAndWait()
+                                    await chat.unload()
+                                    guard !library.isProcessing else { return }
+                                    do {
+                                        await generator.prepareResources(model: selectedModel,
+                                            sourceURL: try library.fileURL(for: selectedModel),
+                                            components: try library.imageComponents(for: selectedModel))
+                                    } catch { generator.errorMessage = error.localizedDescription }
+                                }
+                            }
+                            .disabled(generator.isGenerating || library.isProcessing)
+                        }
                         Picker("LoRA", selection: $loraID) {
                             Text("不使用").tag("")
                             ForEach(library.models.filter { $0.format == .drawThingsBundle && $0.kind == .lora &&
                                 (selectedModel?.architecture == nil || $0.architecture == selectedModel?.architecture) }) { adapter in
-                                Text(adapter.name).tag(adapter.id.uuidString)
+                                Text(adapter.title).tag(adapter.id.uuidString)
                             }
                         }
                         .accessibilityIdentifier("imageLoRAPicker")
@@ -61,8 +82,10 @@ struct GeneratePage: View {
                         TextField("描述你想生成的画面", text: $prompt, axis: .vertical)
                             .lineLimit(3...6)
                             .textFieldStyle(.roundedBorder)
+                            .focused($focusedField, equals: .prompt)
                             .accessibilityIdentifier("imagePrompt")
                         TextField("负面提示词（可选）", text: $negativePrompt, axis: .vertical)
+                            .focused($focusedField, equals: .negativePrompt)
                             .lineLimit(1...3)
                             .textFieldStyle(.roundedBorder)
                         HStack {
@@ -79,6 +102,7 @@ struct GeneratePage: View {
                         }
                         .pickerStyle(.menu)
                         Button {
+                            focusedField = nil
                             if generator.isGenerating {
                                 generator.cancel()
                             } else if let selectedModel {
@@ -93,7 +117,8 @@ struct GeneratePage: View {
                                         let selectedLoRA = try adapter.map { (model: $0, url: try library.fileURL(for: $0), weight: loraWeight) }
                                         await generator.generate(model: selectedModel, sourceURL: url,
                                                                  prompt: prompt, negativePrompt: negativePrompt,
-                                                                 size: size, steps: steps, lora: selectedLoRA)
+                                                                 size: size, steps: steps, lora: selectedLoRA,
+                                                                 components: try library.imageComponents(for: selectedModel))
                                     } catch { generator.errorMessage = error.localizedDescription }
                                 }
                             }
@@ -123,7 +148,22 @@ struct GeneratePage: View {
                 }
                 .padding(20)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("生图")
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("收起键盘", systemImage: "keyboard.chevron.compact.down") { focusedField = nil }
+                        .accessibilityIdentifier("dismissImageKeyboard")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if focusedField != nil {
+                        Button("完成") { focusedField = nil }
+                            .accessibilityIdentifier("finishImageEditing")
+                    }
+                }
+            }
+            .onDisappear { focusedField = nil }
             .onAppear { if selectedModel == nil { selectedID = supported.first?.id.uuidString ?? "" } }
             .onChange(of: selectedID) { _, _ in loraID = "" }
             .onChange(of: supported.count) { _, _ in

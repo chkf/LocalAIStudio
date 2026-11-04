@@ -194,3 +194,39 @@
 "网页来源" = "Web sources";
 "联网默认关闭。开启后可直接搜索和读取公开网页，无需注册或填写 API Key；搜索词和链接会发给对应网站。" = "Web access is off by default. Enable it to search and read public pages without registration or API keys. Search terms and URLs are sent to the relevant websites.";
 "搜索使用公开网页，可能遇到访问限制；失败时会明确提示，也可以直接提供链接。联网会增加等待时间，需要模型正确输出工具请求。" = "Public search pages may restrict access. Failures are shown explicitly; you can also provide a link. Web access adds latency and requires valid model tool requests.";
+
+"显示名称" = "Display Name";
+
+"重命名" = "Rename";
+
+"原文件名" = "Original Filename";
+
+"重命名模型" = "Rename Model";
+
+"保存" = "Save";
+
+"留空恢复文件名；不会修改模型文件。" = "Leave blank to use the filename. The model file is unchanged.";
+
+"模型与配套组件" = "Model and components";
+
+"按原文件名匹配目录" = "Match catalog by original filename";
+
+"基础配置必须与权重一致。原始 PyTorch Checkpoint 不能直接运行；这里只接受 Draw Things 格式。" = "The profile must match the weights. Raw PyTorch checkpoints cannot run directly; use Draw Things format.";
+
+"使用配套资源" = "Use model components";
+
+"配套组件" = "Companion components";
+
+"可选择已导入且架构匹配的 Draw Things .ckpt 组件。原始 Safetensors VAE／文本编码器需在主模型转换时选择。缺少的标准组件可在生图页下载。" = "Select imported Draw Things .ckpt components matching this architecture. Choose raw Safetensors VAE/text encoders during model conversion. Download missing standard components on the Generate page.";
+
+"检查并下载配套资源" = "Check and download components";
+
+"收起键盘" = "Dismiss keyboard";
+
+"文本编码器" = "Text encoder";
+
+"使用内置或标准组件" = "Use embedded or standard component";
+
+"第二文本编码器（bigG）" = "Second text encoder (bigG)";
+
+"此架构使用标准配套组件；转换后可在生图页指定兼容的 Draw Things VAE／文本编码器。" = "This architecture uses standard components. After conversion, select compatible Draw Things VAE/text encoders on the Generate page.";

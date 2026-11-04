@@ -48,6 +48,9 @@ actor ModelFiles {
                         throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
                     }
                 }
+                if model.format != .drawThingsBundle, (model.identificationVersion ?? 0) < ModelIdentity.version {
+                    return try reinspect(model)
+                }
                 return model
             } catch {
                 throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
@@ -85,7 +88,7 @@ actor ModelFiles {
                                    importedAt: .now, format: .mlxBundle, architecture: inspection.architecture,
                                    quantization: inspection.quantization, adapter: nil,
                                    validationNote: "已保存完整 MLX 模型目录；权重与架构兼容性需实际加载验证。",
-                                   kind: .text, architectureSource: "config.json 的 model_type")
+                                   kind: .text, architectureSource: "config.json 的 model_type", identificationVersion: ModelIdentity.version)
             try JSONEncoder().encode(model).write(
                 to: staging.appendingPathComponent("metadata.json"), options: .atomic)
             try Task.checkCancellation()
@@ -209,7 +212,7 @@ actor ModelFiles {
                 id: id, name: displayName, byteCount: Int64(size), importedAt: .now,
                 format: inspection.format, architecture: inspection.architecture,
                 quantization: inspection.quantization, adapter: inspection.adapter, validationNote: inspection.note,
-                kind: inspection.kind, architectureSource: inspection.architectureSource
+                kind: inspection.kind, architectureSource: inspection.architectureSource, identificationVersion: ModelIdentity.version
             )
             let destination = staging.appendingPathComponent("model.\(model.format.fileExtension)")
             try files.moveItem(at: stagedFile, to: destination)
@@ -233,24 +236,48 @@ actor ModelFiles {
         try files.removeItem(at: directory.appendingPathComponent(model.id.uuidString, isDirectory: true))
     }
 
-    func reinspect(_ model: LocalModel) throws -> LocalModel {
-        let url = fileURL(for: model)
+    func rename(_ model: LocalModel, displayName: String) throws -> LocalModel {
+        let metadata = fileURL(for: model).deletingLastPathComponent().appendingPathComponent("metadata.json")
+        var updated = try JSONDecoder().decode(LocalModel.self, from: Data(contentsOf: metadata))
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.displayName = trimmed.isEmpty || trimmed == updated.name ? nil : trimmed
+        try JSONEncoder().encode(updated).write(to: metadata, options: .atomic)
+        return updated
+    }
+
+    func reinspect(_ original: LocalModel) throws -> LocalModel {
+        let url = fileURL(for: original)
+        let model = try JSONDecoder().decode(LocalModel.self, from: Data(contentsOf: url.deletingLastPathComponent().appendingPathComponent("metadata.json")))
         var result = model
         if model.format == .mlxBundle {
             let inspection = try inspectMLXFolder(url)
             result = LocalModel(id: model.id, name: model.name, byteCount: model.byteCount,
                 importedAt: model.importedAt, format: model.format, architecture: inspection.architecture,
                 quantization: inspection.quantization, adapter: nil, validationNote: model.validationNote,
-                kind: .text, architectureSource: "config.json 的 model_type")
+                kind: .text, architectureSource: "config.json 的 model_type", identificationVersion: ModelIdentity.version)
         } else if model.format != .drawThingsBundle {
             let inspection = try ModelFile.inspect(url, name: model.name)
+            guard inspection.format == model.format else {
+                throw ModelFileError.invalid("重新识别的格式与已存储文件不同，现有文件和记录已保留。请重新导入此模型。")
+            }
             result = LocalModel(id: model.id, name: model.name, byteCount: model.byteCount,
                 importedAt: model.importedAt, format: inspection.format, architecture: inspection.architecture,
                 quantization: inspection.quantization, adapter: inspection.adapter, validationNote: inspection.note,
                 kind: inspection.kind, architectureSource: inspection.architectureSource)
         }
+        result.displayName = model.displayName
+        result.imageConfiguration = model.imageConfiguration
+        result.identificationVersion = ModelIdentity.version
         try JSONEncoder().encode(result).write(to: url.deletingLastPathComponent().appendingPathComponent("metadata.json"), options: .atomic)
         return result
+    }
+
+    func configureImage(_ model: LocalModel, configuration: ImageModelConfiguration) throws -> LocalModel {
+        let metadata = fileURL(for: model).deletingLastPathComponent().appendingPathComponent("metadata.json")
+        var current = try JSONDecoder().decode(LocalModel.self, from: Data(contentsOf: metadata))
+        current.imageConfiguration = configuration
+        try JSONEncoder().encode(current).write(to: metadata, options: .atomic)
+        return current
     }
 
     func process(_ model: LocalModel, operation: ImageModelOperation,
@@ -276,11 +303,13 @@ actor ModelFiles {
                 throw ModelFileError.invalid("转换产物缺少主权重。")
             }
             let suffix = bundle.quantization.hasPrefix("8-bit") ? " · 8-bit" : " · 已转换"
-            let result = LocalModel(id: id, name: model.name + suffix, byteCount: total,
+            var result = LocalModel(id: id, name: model.name + suffix, byteCount: total,
                 importedAt: .now, format: .drawThingsBundle, architecture: bundle.version,
                 quantization: bundle.quantization, adapter: bundle.lora == nil ? nil : "LoRA",
                 validationNote: "已完成转换；实际生成效果与设备内存需求仍需验证。",
-                kind: bundle.lora == nil ? .image : .lora, architectureSource: "转换器确认")
+                kind: bundle.lora == nil ? .image : .lora, architectureSource: "转换器确认", identificationVersion: ModelIdentity.version)
+            result.displayName = model.displayName.map { $0 + suffix }
+            if case .quantize = operation { result.imageConfiguration = model.imageConfiguration }
             try JSONEncoder().encode(result).write(to: staging.appendingPathComponent("metadata.json"), options: .atomic)
             try Task.checkCancellation()
             try files.moveItem(at: staging, to: directory.appendingPathComponent(id.uuidString))

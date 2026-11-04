@@ -55,6 +55,10 @@ targets:
         buildPhase: resources
       - path: Resources/zh-Hans.lproj/Localizable.strings
         buildPhase: resources
+      - path: Resources/models.json
+        buildPhase: resources
+      - path: Resources/configs.json
+        buildPhase: resources
       - path: Resources/AppIcon.icon
         type: file
         buildPhase: resources

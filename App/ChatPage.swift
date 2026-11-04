@@ -205,7 +205,7 @@ struct ChatPage: View {
         HStack {
             Menu {
                 ForEach(library.models.filter { $0.supportsTextGeneration }) { model in
-                    Button(model.name) {
+                    Button(model.title) {
                         Task {
                             await chat.unload()
                             selectedModelID = model.id.uuidString
@@ -214,7 +214,7 @@ struct ChatPage: View {
                 }
                 Button("管理模型…", action: openModels)
             } label: {
-                Label(selectedModel?.name ?? "未选择模型", systemImage: "chevron.up.chevron.down")
+                Label(selectedModel?.title ?? "未选择模型", systemImage: "chevron.up.chevron.down")
                     .font(.subheadline).lineLimit(1)
             }
             .disabled(busy)

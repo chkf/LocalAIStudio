@@ -6,9 +6,9 @@ final class ModelIdentityTests: XCTestCase {
     func testMetadataWinsAndAdapterRoleIsRetained() {
         let result = ModelIdentity.identify(metadata: ["modelspec.architecture": "stable-diffusion-xl-v1-base"],
                                             tensors: ["unet.layer.lora_down.weight": [4, 16]])
-        XCTAssertEqual(result.architecture, "stable-diffusion-xl-v1-base")
+        XCTAssertEqual(result.architecture, "sdxl_base_v0.9")
         XCTAssertEqual(result.kind, .lora)
-        XCTAssertEqual(result.source, "文件元数据声明")
+        XCTAssertEqual(result.source, "文件元数据声明；适配器张量确认角色")
     }
 
     func testLanguageModelWithoutConfigDoesNotInventFamily() {
@@ -60,6 +60,7 @@ final class ModelIdentityTests: XCTestCase {
         let model = try JSONDecoder().decode(LocalModel.self, from: Data(old.utf8))
         XCTAssertNil(model.kind)
         XCTAssertNil(model.architectureSource)
+        XCTAssertNil(model.identificationVersion)
     }
 
     func testAdapterCannotBeSelectedAsStandaloneChatModel() {
@@ -68,6 +69,71 @@ final class ModelIdentityTests: XCTestCase {
             validationNote: "metadata", kind: .lora)
         XCTAssertFalse(adapter.supportsTextGeneration)
         XCTAssertFalse(adapter.supportsImageGeneration)
+    }
+
+
+    func testBaseModelMetadataDoesNotHideComponents() {
+        let metadata = ["modelspec.architecture": "stable-diffusion-xl-v1-base"]
+        let vae = ModelIdentity.identify(metadata: metadata, tensors: ["encoder.conv_in.weight": [4], "decoder.conv_out.weight": [4]])
+        XCTAssertEqual(vae.kind, .vae)
+        XCTAssertEqual(vae.architecture, "sdxl_base_v0.9")
+        let clip = ModelIdentity.identify(metadata: metadata, tensors: ["text_model.encoder.layers.0.self_attn.q_proj.weight": [16, 16]])
+        XCTAssertEqual(clip.kind, .textEncoder)
+        XCTAssertEqual(ModelIdentity.kind(for: "stable-diffusion-v1/vae"), .vae)
+        XCTAssertEqual(ModelIdentity.kind(for: "clip-vision"), .visionEncoder)
+    }
+
+    func testUnknownOrConflictingMetadataDoesNotHideTensorArchitecture() {
+        for declaration in ["custom", "stable-diffusion-v2"] {
+            let result = ModelIdentity.identify(metadata: ["architecture": declaration], tensors: ["unet.down_blocks.1.attentions.0.transformer_blocks.0.attn2.to_k.weight": [16, 768]])
+            XCTAssertEqual(result.architecture, "v1")
+            XCTAssertEqual(result.kind, .image)
+        }
+    }
+
+    func testFullCheckpointIsNotClassifiedAsItsEmbeddedEncoder() {
+        let result = ModelIdentity.identify(metadata: [:], tensors: [
+            "model.diffusion_model.input_blocks.0.0.weight": [16, 4, 3, 3],
+            "cond_stage_model.transformer.text_model.encoder.layers.0.self_attn.q_proj.weight": [16, 16]
+        ])
+        XCTAssertEqual(result.kind, .image)
+        XCTAssertNil(result.architecture)
+    }
+
+    func testMetadataAliasesMatchImporterVersions() {
+        for (declared, expected) in [("sd_v1", "v1"), ("stable-diffusion-xl-v1-base", "sdxl_base_v0.9"),
+                                      ("sdxl_refiner_v1.0", "sdxl_refiner_v0.9"), ("FLUX.1-dev", "flux1"),
+                                      ("FLUX.2-klein-4B", "flux2_4b"), ("QwenImage", "qwen_image")] {
+            XCTAssertEqual(ModelIdentity.canonicalArchitecture(declared), expected)
+        }
+    }
+
+    func testGGUFImageAndEncoderAreNotChatModels() throws {
+        for (architecture, kind) in [("flux", ModelKind.image), ("qwen_image", .image), ("t5encoder", .textEncoder), ("unknown", .unknown), ("llama", .text)] {
+            let inspection = try inspectGGUF(architecture: architecture)
+            XCTAssertEqual(inspection.kind, kind)
+            let model = LocalModel(id: UUID(), name: "model.gguf", byteCount: 1, importedAt: .now,
+                format: .gguf, architecture: architecture, quantization: nil, adapter: nil,
+                validationNote: "metadata", kind: inspection.kind)
+            XCTAssertEqual(model.supportsTextGeneration, kind == .text)
+            XCTAssertFalse(model.supportsImageGeneration)
+        }
+        XCTAssertEqual(try inspectGGUF(architecture: "clip", vision: true).kind, .visionEncoder)
+    }
+
+    private func inspectGGUF(architecture: String, vision: Bool = false) throws -> ModelInspection {
+        var data = Data("GGUF".utf8)
+        func number(_ value: UInt64, _ bytes: Int) { for offset in 0..<bytes { data.append(UInt8((value >> (offset * 8)) & 255)) } }
+        func string(_ value: String) { number(UInt64(value.utf8.count), 8); data.append(Data(value.utf8)) }
+        number(3, 4)
+        number(0, 8)
+        number(vision ? 2 : 1, 8)
+        string("general.architecture"); number(8, 4); string(architecture)
+        if vision { string("clip.has_vision_encoder"); number(7, 4); number(1, 1) }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        try data.write(to: url)
+        return try ModelFile.inspect(url, name: "model.gguf")
     }
 
     func testFilenameNeverDeterminesSafetensorsArchitecture() throws {

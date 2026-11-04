@@ -233,7 +233,7 @@ final class ChatSession {
             // This is headroom reported by iOS, not an estimate of model peak memory.
             if availableMemoryBytes == 0 { throw ChatError.noMemoryBudget }
             if loadedModelID != model.id {
-                status = "正在加载 \(model.name)"
+                status = "正在加载 \(model.title)"
                 loadedModelID = nil
                 loadSeconds = nil
                 loadSeconds = try await runtime.load(fileURL: fileURL, format: model.format, history: history, options: options)
@@ -269,7 +269,7 @@ final class ChatSession {
                 metricsNote = "本次引擎未返回性能统计：\(error.localizedDescription)"
             }
             performanceRecords.append(InferenceRecord(
-                modelID: model.id, modelName: model.name, quantization: model.quantization,
+                modelID: model.id, modelName: model.title, quantization: model.quantization,
                 backend: await runtime.backendName, date: .now, loadSeconds: loadSeconds,
                 firstTokenSeconds: firstTokenSeconds, tokensPerSecond: tokensPerSecond,
                 outputTokens: metrics?.outputTokens

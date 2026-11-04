@@ -13,7 +13,7 @@ struct ModelsPage: View {
     let selectModel: (LocalModel) -> Void
 
     private var filteredModels: [LocalModel] {
-        library.models.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+        library.models.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.name.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -65,7 +65,7 @@ struct ModelsPage: View {
                                     ModelDetail(original: model, selectModel: selectModel)
                                 } label: {
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(model.name).font(.headline).lineLimit(2)
+                                        Text(model.title).font(.headline).lineLimit(2)
                                         Text("\(model.format.rawValue) · \(bytes(model.byteCount))")
                                             .font(.subheadline).foregroundStyle(.secondary)
                                         Text(model.identitySummary)
@@ -148,7 +148,7 @@ struct ModelsPage: View {
                 get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
             ), titleVisibility: .visible) {
                 if let model = pendingDelete {
-                    Button("删除 \(model.name)", role: .destructive) {
+                    Button("删除 \(model.title)", role: .destructive) {
                         Task {
                             if chat.loadedModelID == model.id || (chat.isBusy && chat.lastModelID == model.id) {
                                 await chat.unload()
@@ -171,6 +171,8 @@ private struct ModelDetail: View {
     @Environment(ChatSession.self) private var chat
     @Environment(ImageGenerationSession.self) private var images
     @State private var showingConversion = false
+    @State private var showingRename = false
+    @State private var newName = ""
     let original: LocalModel
     private var model: LocalModel { library.models.first { $0.id == original.id } ?? original }
     let selectModel: (LocalModel) -> Void
@@ -178,7 +180,14 @@ private struct ModelDetail: View {
     var body: some View {
         List {
             Section("文件") {
-                LabeledContent("名称", value: model.name)
+                LabeledContent("显示名称", value: model.title)
+                Button("重命名", systemImage: "pencil") {
+                    newName = model.displayName ?? ""
+                    showingRename = true
+                }
+                .disabled(library.isWriting)
+                .accessibilityIdentifier("renameModel")
+                LabeledContent("原文件名", value: model.name)
                 LabeledContent("大小", value: bytes(model.byteCount))
                 LabeledContent("导入时间", value: model.importedAt.formatted(date: .abbreviated, time: .shortened))
             }
@@ -194,7 +203,7 @@ private struct ModelDetail: View {
                 Text(model.validationNote).font(.subheadline).foregroundStyle(.secondary)
             }
             Section("模型处理") {
-                if model.format == .safetensors && model.kind != .text && model.kind != .vae && model.kind != .textEncoder && model.kind != .lokr {
+                if model.format == .safetensors && (model.kind == .image || model.kind == .lora || model.kind == .unknown || model.kind == nil) {
                     Button("转换为生图模型／LoRA") { showingConversion = true }
                         .disabled(library.isWriting)
                 }
@@ -221,6 +230,8 @@ private struct ModelDetail: View {
             Section {
                 Text(model.compatibilityDescription)
                 if model.supportsImageGeneration {
+                    NavigationLink("模型与配套组件") { ImageModelSettingsPage(model: model) }
+                        .disabled(library.isProcessing || images.isGenerating)
                     Button("用于生图", systemImage: "photo") { selectModel(model) }
                         .disabled(library.isProcessing)
                 }
@@ -232,6 +243,15 @@ private struct ModelDetail: View {
             } footer: {
                 Text("文件头识别不等于完整性或运行验证。模型架构、量化与适配器必须由对应引擎实际加载确认。")
             }
+        }
+        .alert("重命名模型", isPresented: $showingRename) {
+            TextField("显示名称", text: $newName)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("取消", role: .cancel) { }
+            Button("保存") { Task { await library.rename(model, displayName: newName) } }
+        } message: {
+            Text("留空恢复文件名；不会修改模型文件。")
         }
         .sheet(isPresented: $showingConversion) { ModelProcessingSheet(model: model) }
         .navigationTitle("模型详情")

@@ -43,6 +43,73 @@ final class ModelFilesTests: XCTestCase {
         XCTAssertEqual(try root.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
     }
 
+    func testDisplayNameSurvivesReloadAndReinspectionWithoutMovingWeights() async throws {
+        let root = directory.appendingPathComponent("Models")
+        let store = try ModelFiles(directory: root)
+        let source = try write("original.safetensors", data: safetensors())
+        let original = try await store.importFile(from: source)
+        let weightURL = store.fileURL(for: original)
+        let renamed = try await store.rename(original, displayName: "  我的模型  ")
+        XCTAssertEqual(renamed.title, "我的模型")
+        XCTAssertEqual(renamed.name, "original.safetensors")
+        XCTAssertEqual(renamed.id, original.id)
+        XCTAssertEqual(store.fileURL(for: renamed), weightURL)
+        XCTAssertEqual(try Data(contentsOf: weightURL), try Data(contentsOf: source))
+
+        let reloaded = try ModelFiles(directory: root)
+        let models = try await reloaded.list()
+        XCTAssertEqual(models.first?.displayName, "我的模型")
+        let inspected = try await reloaded.reinspect(renamed)
+        XCTAssertEqual(inspected.title, "我的模型")
+        let restored = try await reloaded.rename(inspected, displayName: "  ")
+        XCTAssertNil(restored.displayName)
+        XCTAssertEqual(restored.title, original.name)
+    }
+
+    func testOldIdentityIsRefreshedOnceWithoutLosingUserConfiguration() async throws {
+        let root = directory.appendingPathComponent("Models")
+        let store = try ModelFiles(directory: root)
+        let source = try write("source.safetensors", data: safetensors(metadata: ["modelspec.architecture": "stable-diffusion-xl-v1-base"]))
+        let imported = try await store.importFile(from: source)
+        let payload = store.fileURL(for: imported)
+        let metadata = payload.deletingLastPathComponent().appendingPathComponent("metadata.json")
+        var old = try JSONSerialization.jsonObject(with: Data(contentsOf: metadata)) as! [String: Any]
+        old.removeValue(forKey: "identificationVersion")
+        old["architecture"] = "stable-diffusion-xl-v1-base"
+        old["displayName"] = "My image model"
+        old["imageConfiguration"] = ["template": "sd_xl_base_1.0_f16.ckpt", "components": [String: String]()] as [String: Any]
+        try JSONSerialization.data(withJSONObject: old).write(to: metadata)
+
+        let migratedModels = try await store.list()
+        let migrated = try XCTUnwrap(migratedModels.first)
+        XCTAssertEqual(migrated.architecture, "sdxl_base_v0.9")
+        XCTAssertEqual(migrated.identificationVersion, ModelIdentity.version)
+        XCTAssertEqual(migrated.title, "My image model")
+        XCTAssertEqual(migrated.imageConfiguration?.template, "sd_xl_base_1.0_f16.ckpt")
+        XCTAssertEqual(store.fileURL(for: migrated), payload)
+        XCTAssertEqual(try Data(contentsOf: payload), try Data(contentsOf: source))
+        let afterFirstLoad = try Data(contentsOf: metadata)
+        _ = try await store.list()
+        XCTAssertEqual(try Data(contentsOf: metadata), afterFirstLoad)
+    }
+
+    func testReinspectionCannotChangeTheStoredPayloadPath() async throws {
+        let store = try ModelFiles(directory: directory.appendingPathComponent("Models"))
+        let source = try write("source.bin", data: Data(repeating: 0x80, count: 32))
+        let imported = try await store.importFile(from: source)
+        let payload = store.fileURL(for: imported)
+        let metadata = payload.deletingLastPathComponent().appendingPathComponent("metadata.json")
+        let before = try Data(contentsOf: metadata)
+        try safetensors().write(to: payload)
+        do {
+            _ = try await store.reinspect(imported)
+            XCTFail("Reinspection must not change the file extension without moving the payload.")
+        } catch { }
+        XCTAssertEqual(try Data(contentsOf: metadata), before)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: payload.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: payload.deletingPathExtension().appendingPathExtension("safetensors").path))
+    }
+
     func testLinkedDownloadSurvivesUntilCallerCleanupAndInvalidImportPreservesIt() async throws {
         let root = directory.appendingPathComponent("Models")
         let store = try ModelFiles(directory: root)
@@ -139,7 +206,7 @@ final class ModelFilesTests: XCTestCase {
         let url = try write("unrelated-name.bin", data: data)
         let info = try ModelFile.inspect(url, name: url.lastPathComponent)
         XCTAssertEqual(info.format, .safetensors)
-        XCTAssertEqual(info.architecture, "stable-diffusion-xl-v1-base")
+        XCTAssertEqual(info.architecture, "sdxl_base_v0.9")
         XCTAssertTrue(info.adapter?.hasPrefix("LoRA") == true)
         XCTAssertTrue(info.quantization?.contains("F32") == true)
 

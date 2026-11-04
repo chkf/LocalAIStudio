@@ -222,7 +222,7 @@ struct DevicePage: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("systemTaskStatus")
             if chat.isBusy {
-                Text(library.models.first { $0.id == chat.lastModelID }?.name ?? "AI 任务")
+                Text(library.models.first { $0.id == chat.lastModelID }?.title ?? "AI 任务")
                     .font(.headline).lineLimit(2)
                 HStack {
                     ProgressView()

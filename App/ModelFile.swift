@@ -41,9 +41,14 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
     let validationNote: String
     var kind: ModelKind? = nil
     var architectureSource: String? = nil
+    var imageConfiguration: ImageModelConfiguration? = nil
+    var displayName: String? = nil
+    var identificationVersion: Int? = nil
 
-    var supportsImageGeneration: Bool { format.supportsImageGeneration && adapter == nil && kind != .lora && kind != .lokr }
-    var supportsTextGeneration: Bool { format.supportsTextGeneration && adapter == nil && kind != .lora && kind != .lokr }
+    var title: String { displayName ?? name }
+
+    var supportsImageGeneration: Bool { format.supportsImageGeneration && adapter == nil && (kind == nil || kind == .image || (format == .checkpoint && kind == .unknown)) }
+    var supportsTextGeneration: Bool { format.supportsTextGeneration && adapter == nil && (kind == nil || kind == .text) }
 
     var identitySummary: String {
         let values = [kind?.rawValue, architecture].compactMap { $0 }
@@ -261,8 +266,9 @@ enum ModelFile {
         guard version == 2 || version == 3 else { throw ModelFileError.invalid("仅识别小端序 GGUF v2/v3 文件。") }
         let tensorCount = try reader.number(8)
         let fieldCount = try reader.number(8)
-        var result = ModelInspection(format: .gguf, note: "已检查 GGUF v\(version) 元数据与张量起始范围；未验证完整权重和引擎兼容性。")
+        var result = ModelInspection(format: .gguf, note: "已检查 GGUF v\(version) 元数据与张量起始范围；未验证完整权重和引擎兼容性。", kind: .unknown)
         var alignment: UInt64 = 32
+        var hasVisionEncoder = false
         do {
             for _ in 0..<fieldCount {
                 let key = try reader.string()
@@ -273,11 +279,11 @@ enum ModelFile {
                 if ["general.file_type", "general.alignment"].contains(key), type != 4, type != 10 {
                     throw ModelFileError.invalid("GGUF 的 \(key) 应为无符号整数。")
                 }
-                let value = try reader.value(type: type, retain: ["general.architecture", "general.file_type", "general.alignment", "adapter.type"].contains(key))
+                let value = try reader.value(type: type, retain: ["general.architecture", "general.file_type", "general.alignment", "adapter.type", "clip.has_vision_encoder"].contains(key))
                 switch key {
                 case "general.architecture":
                     result.architecture = value
-                    result.kind = .text
+                    result.kind = value.map { ModelIdentity.kind(for: $0) } ?? .unknown
                     result.architectureSource = "GGUF general.architecture 元数据"
                 case "general.file_type":
                     let types = ["F32", "F16", "Q4_0", "Q4_1", "Q4_1 / F16", "Q4_2", "Q4_3", "Q8_0", "Q5_0", "Q5_1", "Q2_K", "Q3_K_S", "Q3_K_M", "Q3_K_L", "Q4_K_S", "Q4_K_M", "Q5_K_S", "Q5_K_M", "Q6_K"]
@@ -291,6 +297,7 @@ enum ModelFile {
                         throw ModelFileError.invalid("GGUF 对齐参数无效。")
                     }
                     alignment = parsed
+                case "clip.has_vision_encoder": hasVisionEncoder = type == 7 && value == "1"
                 case "adapter.type": result.adapter = value.map { "\($0)（元数据声明，兼容性未验证）" }
                 default: break
                 }
@@ -315,6 +322,7 @@ enum ModelFile {
         } catch PrefixReader.Limit.reached {
             result.note = "已识别 GGUF 文件头；元数据超过 8 MiB 检查范围，未完成结构验证。"
         }
+        if result.architecture == "clip", hasVisionEncoder { result.kind = .visionEncoder }
         if result.adapter?.lowercased().hasPrefix("lora") == true { result.kind = .lora }
         return result
     }

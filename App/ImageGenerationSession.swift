@@ -14,14 +14,28 @@ final class ImageGenerationSession {
 
     @ObservationIgnored private var job: Task<Void, Never>?
 
+    func prepareResources(model: LocalModel, sourceURL: URL, components: [String: URL]) async {
+        await run(model: model, sourceURL: sourceURL, prompt: "", negativePrompt: "", size: 512, steps: 0,
+                  components: components, prepareOnly: true)
+    }
+
     func generate(model: LocalModel, sourceURL: URL, prompt: String,
                   negativePrompt: String, size: Int, steps: Int,
-                  lora: (model: LocalModel, url: URL, weight: Double)? = nil) async {
+                  lora: (model: LocalModel, url: URL, weight: Double)? = nil,
+                  components: [String: URL] = [:]) async {
+        await run(model: model, sourceURL: sourceURL, prompt: prompt, negativePrompt: negativePrompt,
+                  size: size, steps: steps, lora: lora, components: components, prepareOnly: false)
+    }
+
+    private func run(model: LocalModel, sourceURL: URL, prompt: String,
+                     negativePrompt: String, size: Int, steps: Int,
+                     lora: (model: LocalModel, url: URL, weight: Double)? = nil,
+                     components: [String: URL], prepareOnly: Bool) async {
         guard !isGenerating, model.supportsImageGeneration else { return }
         isGenerating = true
         status = "准备生图模型…"
         errorMessage = nil
-        resultURL = nil
+        if !prepareOnly { resultURL = nil }
         let task = Task {
             do {
                 try Task.checkCancellation()
@@ -33,9 +47,18 @@ final class ImageGenerationSession {
                     try FileManager.default.removeItem(at: url)
                 }
                 var aliases: [URL] = []
+                let environment = MediaGenerationEnvironment.default
+                let oldEnvironmentURLs = environment.externalUrls
+                let oldExternalURLs = ModelZoo.externalUrls
+                let oldPreference = ModelZoo.isExternalUrlsPreferred
+                environment.externalUrls = [directory]
+                ModelZoo.isExternalUrlsPreferred = true
                 let oldModels = ModelZoo.overrideMapping
                 let oldLoRAs = LoRAZoo.overrideMapping
                 defer {
+                    environment.externalUrls = oldEnvironmentURLs
+                    ModelZoo.externalUrls = oldExternalURLs
+                    ModelZoo.isExternalUrlsPreferred = oldPreference
                     ModelZoo.overrideMapping = oldModels
                     LoRAZoo.overrideMapping = oldLoRAs
                     for url in aliases { try? FileManager.default.removeItem(at: url) }
@@ -47,20 +70,59 @@ final class ImageGenerationSession {
                     try FileManager.default.linkItem(at: source, to: target)
                     aliases.append(target)
                 }
-                var modelFile = model.name
-                var template: String?
+                var spec = try ImageModelResources.specification(for: model, url: sourceURL)
+                var template = model.imageConfiguration?.template
                 if model.format == .drawThingsBundle {
                     let bundle = try ImageModelBundle.read(sourceURL)
-                    guard let spec = bundle.model else { throw ModelFileError.invalid("LoRA 不能单独作为生图主模型。") }
-                    ModelZoo.overrideMapping[spec.file] = spec
-                    modelFile = bundle.file
                     template = bundle.template
-                    for url in try FileManager.default.contentsOfDirectory(at: sourceURL, includingPropertiesForKeys: nil)
-                        where url.lastPathComponent != "bundle.json" {
-                        try link(url, name: url.lastPathComponent)
+                    // Only declared components become runtime files; never link arbitrary bundle entries.
+                    let filenames = Set(ModelZoo.filesToDownload(spec).map(\.file))
+                    for filename in filenames {
+                        if components[filename] != nil { continue }
+                        let url = sourceURL.appendingPathComponent(filename)
+                        if FileManager.default.fileExists(atPath: url.path) {
+                            try ImageModelResources.validateCheckpoint(url)
+                            try link(url, name: filename)
+                        } else if filename.hasPrefix("studio_") {
+                            throw ModelFileError.invalid("转换模型缺少组件：\(filename)。请重新转换或指定组件。")
+                        }
                     }
                 } else {
-                    try link(sourceURL, name: model.name)
+                    try ImageModelResources.validateCheckpoint(sourceURL)
+                    template = template ?? spec.file
+                    // Keep user weights under an owned alias so catalog hash checks cannot replace them.
+                    spec.file = "studio_\(model.id.uuidString)_main.ckpt"
+                    try link(sourceURL, name: spec.file)
+                }
+                let required = Set(ImageModelResources.components(for: spec).map(\.file))
+                for (original, source) in components {
+                    guard required.contains(original) else {
+                        throw ModelFileError.invalid("配套组件配置已变化，请重新保存模型配置。")
+                    }
+                    try ImageModelResources.validateCheckpoint(source)
+                    let alias = "studio_\(UUID().uuidString)_component.ckpt"
+                    try link(source, name: alias)
+                    ImageModelResources.replacingComponent(original, with: alias, in: &spec)
+                }
+                let modelFile = spec.file
+                ModelZoo.overrideMapping[modelFile] = spec
+                _ = try await environment.ensure(modelFile, offline: true) { state in
+                    Task { @MainActor in
+                        switch state {
+                        case .resolving: self.status = "检查配套资源…"
+                        case .verifying(let file, let index, let total):
+                            self.status = "检查 \(index)/\(total) · \(file)"
+                        case .downloading(let file, let index, let total, let written, let expected):
+                            let received = ByteCountFormatter.string(fromByteCount: written, countStyle: .file)
+                            let size = expected > 0 ? " / " + ByteCountFormatter.string(fromByteCount: expected, countStyle: .file) : ""
+                            self.status = "下载 \(index)/\(total) · \(file)\n\(received)\(size)"
+                        }
+                    }
+                }
+                try Task.checkCancellation()
+                if prepareOnly {
+                    status = "配套资源已就绪"
+                    return
                 }
                 var pipeline = try await MediaGenerationPipeline.fromPretrained(
                     modelFile, backend: .local(directory: directory.path)
@@ -125,7 +187,7 @@ final class ImageGenerationSession {
             } catch is CancellationError {
                 status = "已取消"
             } catch {
-                errorMessage = "无法使用这个 Checkpoint 生图：\(error.localizedDescription)"
+                errorMessage = "生图模型或配套资源加载失败：\(error.localizedDescription)"
                 status = "生成失败"
             }
         }

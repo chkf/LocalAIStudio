@@ -87,6 +87,32 @@ final class ModelLibrary {
         importTask?.cancel()
     }
 
+    func rename(_ model: LocalModel, displayName: String) async {
+        guard let files, !isWriting else { return }
+        do {
+            let updated = try await files.rename(model, displayName: displayName)
+            if let index = models.firstIndex(where: { $0.id == updated.id }) { models[index] = updated }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func configureImage(_ model: LocalModel, configuration: ImageModelConfiguration) async -> Bool {
+        guard let files, !isWriting else { return false }
+        do {
+            let updated = try await files.configureImage(model, configuration: configuration)
+            if let index = models.firstIndex(where: { $0.id == updated.id }) { models[index] = updated }
+            return true
+        } catch { errorMessage = error.localizedDescription; return false }
+    }
+
+    func imageComponents(for model: LocalModel) throws -> [String: URL] {
+        try (model.imageConfiguration?.components ?? [:]).mapValues { id in
+            guard let component = models.first(where: { $0.id == id }), component.format == .checkpoint else {
+                throw ModelFileError.invalid("已配置的配套组件已被删除，请重新选择。")
+            }
+            return try fileURL(for: component)
+        }
+    }
+
     func reinspect(_ model: LocalModel) async {
         guard let files, !isWriting else { return }
         do {
@@ -105,7 +131,7 @@ final class ModelLibrary {
         defer { isProcessing = false; processingTask = nil }
         await prepare()
         guard !Task.isCancelled, !processingCancelled else { return }
-        processingStatus = "正在处理 \(model.name)"
+        processingStatus = "正在处理 \(model.title)"
         let job = Task { [weak self] in
             try await files.process(model, operation: operation) { [weak self] fraction in
                 Task { @MainActor in self?.processingProgress = min(1, max(0, fraction)) }

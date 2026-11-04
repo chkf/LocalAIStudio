@@ -35,7 +35,7 @@ struct ImageModelBundle: Codable {
 }
 
 enum ImageModelOperation: Sendable {
-    case convert(template: String, vae: URL?)
+    case convert(template: String, vae: URL?, textEncoder: URL? = nil, textEncoder2: URL? = nil)
     case lora(version: String?)
     case quantize
 }
@@ -82,10 +82,10 @@ enum ImageModelTools {
             guard let version = importer.version else { throw ModelFileError.invalid("无法确认 LoRA 的底模架构。") }
             let spec = LoRAZoo.Specification(name: name, file: filename, prefix: "", version: version)
             return ImageModelBundle(file: filename, version: version.rawValue, lora: spec, quantization: "FP16")
-        case .convert(let template, let vae):
+        case .convert(let template, let vae, let textEncoder, let textEncoder2):
             let inspection = try ModelFile.inspect(source, name: name)
             guard inspection.format == .safetensors, inspection.adapter == nil,
-                  inspection.kind != .text, inspection.kind != .vae, inspection.kind != .textEncoder else {
+                  inspection.kind == .image || inspection.kind == .unknown else {
                 throw ModelFileError.invalid("请选择生图主模型 Safetensors 文件。")
             }
             guard var spec = profiles.first(where: { $0.file == template }) else {
@@ -121,10 +121,32 @@ enum ImageModelTools {
             if vae != nil && !sdFamily.contains(detected.version) {
                 throw ModelFileError.invalid("此架构请使用基础配置指定的 VAE；独立 VAE 转换目前支持 SD1／SD2／SDXL。")
             }
+            let customText = textEncoder != nil || textEncoder2 != nil
+            if customText {
+                guard sdFamily.contains(detected.version) else {
+                    throw ModelFileError.invalid("此架构的原始文本编码器暂不支持转换，请使用配套的 Draw Things 组件。")
+                }
+                if detected.version == .sdxlBase {
+                    let hasFirst = textEncoder != nil || detected.stateDict.keys.contains { $0.hasPrefix("conditioner.embedders.0.") }
+                    let hasSecond = textEncoder2 != nil || detected.stateDict.keys.contains { $0.hasPrefix("conditioner.embedders.1.") }
+                    guard hasFirst && hasSecond else {
+                        throw ModelFileError.invalid("SDXL 需要 CLIP-L 和 OpenCLIP bigG 两个文本编码器，请补齐缺少的组件，或都使用标准组件。")
+                    }
+                }
+                if textEncoder2 != nil && detected.version != .sdxlBase {
+                    throw ModelFileError.invalid("只有 SDXL Base 使用第二个文本编码器。")
+                }
+                for file in [textEncoder, textEncoder2].compactMap({ $0 }) {
+                    let component = try ModelFile.inspect(file, name: "encoder.safetensors")
+                    guard component.format == .safetensors, component.kind == .textEncoder else {
+                        throw ModelFileError.invalid("请选择兼容的 Safetensors 文本编码器。")
+                    }
+                }
+            }
             let importer = ModelOp.ModelImporter(filePath: source.path, modelName: stem,
-                isTextEncoderCustomized: embeddedText,
+                isTextEncoderCustomized: embeddedText || customText,
                 autoencoderFilePath: vae?.path ?? (embeddedVAE ? source.path : nil),
-                textEncoderFilePath: nil, textEncoder2FilePath: nil)
+                textEncoderFilePath: textEncoder?.path, textEncoder2FilePath: textEncoder2?.path)
             let originalPaths = ModelZoo.externalUrls
             let originalPreference = ModelZoo.isExternalUrlsPreferred
             ModelZoo.externalUrls = [destination]
