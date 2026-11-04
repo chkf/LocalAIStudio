@@ -61,7 +61,31 @@ enum SpeechModelFiles {
             }
             total += Int64(size)
         }
+        // sherpa's Kokoro metadata/token readers can call _Exit; validate before
+        // import and again immediately before constructing the native engine.
+        try KokoroMetadata.validate(directory.appendingPathComponent(weight), speakers: speakers)
+        try validateTokens(directory.appendingPathComponent("tokens.txt"))
         return (names, speakers, total)
+    }
+
+    private static func validateTokens(_ file: URL) throws {
+        let handle = try FileHandle(forReadingFrom: file)
+        defer { handle.closeFile() }
+        let data = try handle.read(upToCount: 1_024 * 1_024 + 1) ?? Data()
+        guard data.count <= 1_024 * 1_024, let text = String(data: data, encoding: .utf8),
+              !text.isEmpty, !text.contains("\0") else {
+            throw SpeechModelError.invalid("tokens.txt 不是支持的 Kokoro UTF-8 音素表。")
+        }
+        let whitespace = CharacterSet(charactersIn: " \t\r\u{000B}\u{000C}")
+        var count = 0
+        for line in text.split(separator: "\n") {
+            let fields = line.components(separatedBy: whitespace).filter { !$0.isEmpty }
+            guard (1...2).contains(fields.count), let id = Int32(fields.last ?? ""), id >= 0 else {
+                throw SpeechModelError.invalid("tokens.txt 的音素或编号格式无效。")
+            }
+            count += 1
+        }
+        guard count > 0 else { throw SpeechModelError.invalid("tokens.txt 没有音素。") }
     }
 
     static func chunks(_ text: String) -> [String] {

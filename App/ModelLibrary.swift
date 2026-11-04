@@ -4,6 +4,8 @@ import Observation
 @MainActor @Observable
 final class ModelLibrary {
     private(set) var models: [LocalModel] = []
+    private(set) var issues: [ModelLibraryIssue] = []
+    private(set) var isRefreshing = false
     private(set) var isImporting = false
     private(set) var isProcessing = false
     private(set) var processingStatus = ""
@@ -19,23 +21,56 @@ final class ModelLibrary {
     @ObservationIgnored private var processingTask: Task<LocalModel, Error>?
 
     var totalBytes: Int64 { models.reduce(0) { $0 + $1.byteCount } }
-    var isWriting: Bool { isImporting || isProcessing || download?.transfer?.phase == .importing }
+    var isWriting: Bool { isImporting || isProcessing || isRefreshing || download?.transfer?.phase == .importing }
 
     func open() async {
-        guard !isReady, !isOpening else { return }
+        guard !isOpening, !isReady || download == nil else { return }
         isOpening = true
         defer { isOpening = false }
         do {
             let directory = try ModelFiles.defaultDirectory()
-            let files = try ModelFiles(directory: directory)
-            models = try await files.list()
+            let files: ModelFiles
+            if let existing = self.files {
+                files = existing
+            } else {
+                files = try ModelFiles(directory: directory)
+                let inventory = try await files.list()
+                try Task.checkCancellation()
+                models = inventory.models
+                issues = inventory.issues
+                self.files = files
+                isReady = true
+            }
+            // Download recovery errors must not block already imported models.
             download = try ModelDownload(
                 directory: directory.deletingLastPathComponent().appendingPathComponent("Downloads"),
                 files: files,
                 didImport: { [weak self] model in self?.models.insert(model, at: 0) }
             )
-            self.files = files
-            isReady = true
+        } catch is CancellationError { }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func retryInvalidEntries() async {
+        guard let files, !isWriting else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        do {
+            let inventory = try await files.list()
+            try Task.checkCancellation()
+            models = inventory.models
+            issues = inventory.issues
+        } catch is CancellationError { }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func deleteInvalidEntry(_ issue: ModelLibraryIssue) async {
+        guard let files, !isWriting else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        do {
+            try await files.deleteInvalidEntry(issue)
+            issues.removeAll { $0.id == issue.id }
         } catch { errorMessage = error.localizedDescription }
     }
 

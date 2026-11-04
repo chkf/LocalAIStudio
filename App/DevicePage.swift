@@ -5,6 +5,9 @@ struct DevicePage: View {
     @Environment(DeviceMonitor.self) private var monitor
     @Environment(ChatSession.self) private var chat
     @Environment(ModelLibrary.self) private var library
+    @Environment(ImageGenerationSession.self) private var images
+    @Environment(SpeechController.self) private var speech
+    @Environment(TaskPreparation.self) private var preparation
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
@@ -213,7 +216,7 @@ struct DevicePage: View {
                 HStack {
                     Text("运行状态")
                     Spacer()
-                    Text(chat.isBusy ? "运行中" : "空闲").font(.title3.weight(.medium))
+                    Text(hasRunningTask ? "运行中" : "空闲").font(.title3.weight(.medium))
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 14)
@@ -221,21 +224,62 @@ struct DevicePage: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("systemTaskStatus")
+            if preparation.isPreparing {
+                taskRow("准备任务", status: preparation.title) { preparation.cancel() }
+            }
             if chat.isBusy {
-                Text(library.models.first { $0.id == chat.lastModelID }?.title ?? "AI 任务")
-                    .font(.headline).lineLimit(2)
-                HStack {
-                    ProgressView()
-                    Text(chat.status).font(.subheadline).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("停止", systemImage: "stop.fill") { chat.cancel() }
+                taskRow(library.models.first { $0.id == chat.lastModelID }?.title ?? "AI 任务", status: chat.status) {
+                    preparation.cancel()
+                    chat.cancel()
+                }
+            }
+            if images.isGenerating {
+                taskRow("生图", status: images.status) { images.cancel() }
+            }
+            if library.isProcessing {
+                taskRow("模型处理", status: library.processingStatus) { library.cancelProcessing() }
+            }
+            if speech.isSynthesizing {
+                taskRow("本地语音", status: "正在朗读…") { speech.stopSpeaking() }
+            }
+            if speech.isRecording || speech.isStartingRecording {
+                taskRow("语音输入", status: speech.isStartingRecording ? "准备录音…" : "录音中") { speech.stopTranscription() }
+            }
+            if library.isImporting {
+                taskRow("导入模型", status: library.importingName ?? "正在检查并保存文件…") { library.cancelImport() }
+            }
+            if let transfer = library.download?.transfer, transfer.isBusy {
+                taskRow("下载模型", status: transfer.request.name,
+                        stop: transfer.phase == .downloading ? { Task { await library.download?.pause() } } : nil)
+            }
+            if speech.models.isInstalling {
+                taskRow("添加语音模型", status: speech.models.status) { speech.models.cancelInstall() }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 8)
+    }
+
+    private var hasRunningTask: Bool {
+        preparation.isPreparing || chat.isBusy || images.isGenerating || library.isProcessing || library.isImporting
+            || speech.isSynthesizing || speech.isRecording || speech.isStartingRecording || speech.models.isInstalling
+            || library.download?.transfer?.isBusy == true
+    }
+
+    private func taskRow(_ title: String, status: String, stop: (() -> Void)?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(LocalizedStringKey(title)).font(.headline).lineLimit(2)
+            HStack {
+                ProgressView()
+                Text(LocalizedStringKey(status)).font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                if let stop {
+                    Button("停止", systemImage: "stop.fill", action: stop)
                         .buttonStyle(.glass)
                         .accessibilityIdentifier("stopSystemTask")
                 }
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 8)
     }
 
     @ViewBuilder

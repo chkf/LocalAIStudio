@@ -10,6 +10,7 @@ struct ModelsPage: View {
     @State private var downloading = false
     @State private var query = ""
     @State private var pendingDelete: LocalModel?
+    @State private var pendingInvalidDelete: ModelLibraryIssue?
     let selectModel: (LocalModel) -> Void
 
     private var filteredModels: [LocalModel] {
@@ -28,6 +29,32 @@ struct ModelsPage: View {
                     Section {
                         LabeledContent("本机模型", value: "\(library.models.count) 个")
                         LabeledContent("文件占用", value: bytes(library.totalBytes))
+                    }
+                    if !library.issues.isEmpty {
+                        Section {
+                            ForEach(library.issues) { issue in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Label(issue.name, systemImage: "exclamationmark.triangle")
+                                        .font(.headline).lineLimit(2)
+                                    Text(issue.message).font(.caption).foregroundStyle(.secondary)
+                                    Button("删除异常条目", role: .destructive) { pendingInvalidDelete = issue }
+                                        .disabled(library.isWriting || images.isGenerating || chat.isBusy)
+                                }
+                            }
+                            Button("重新检查异常条目") { Task { await library.retryInvalidEntries() } }
+                                .disabled(library.isWriting)
+                                .accessibilityIdentifier("retryInvalidModels")
+                        } header: { Text("需要处理的模型") } footer: {
+                            Text("这些文件已保留，未计入上方文件占用。可以重试检查，或删除条目后从原始文件重新导入。其他模型仍可使用。")
+                        }
+                    }
+                    if library.download == nil {
+                        Section("下载") {
+                            Text("下载管理未能打开，本机模型仍可使用。下载文件已保留，请重试。")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Button("重新打开下载管理") { Task { await library.open() } }
+                                .disabled(library.isWriting)
+                        }
                     }
                     if let download = library.download, let transfer = download.transfer {
                         Section("下载") { TransferRow(download: download, transfer: transfer) }
@@ -117,7 +144,7 @@ struct ModelsPage: View {
                             .disabled(library.isWriting)
                             .accessibilityIdentifier("importMLXFolder")
                         Button("从 HTTPS 下载", systemImage: "arrow.down.circle") { downloading = true }
-                            .disabled(library.download?.transfer != nil)
+                            .disabled(library.download == nil || library.download?.transfer != nil)
                         Button("清理生图配套资源", systemImage: "trash") {
                             do {
                                 let cache = URL.applicationSupportDirectory.appendingPathComponent("ImageRuntime")
@@ -144,6 +171,20 @@ struct ModelsPage: View {
                 }
             }
             .sheet(isPresented: $downloading) { DownloadSheet() }
+            .confirmationDialog("删除异常模型？", isPresented: Binding(
+                get: { pendingInvalidDelete != nil }, set: { if !$0 { pendingInvalidDelete = nil } }
+            ), titleVisibility: .visible) {
+                if let issue = pendingInvalidDelete {
+                    Button("删除", role: .destructive) {
+                        Task {
+                            if chat.loadedModelID == issue.id { await chat.unload() }
+                            await library.deleteInvalidEntry(issue)
+                        }
+                    }
+                }
+            } message: {
+                Text("这会删除该条目在 App 内保存的文件。请保留原始文件，以便重新导入。其他模型不会被删除。")
+            }
             .confirmationDialog("删除模型文件？", isPresented: Binding(
                 get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
             ), titleVisibility: .visible) {
@@ -236,7 +277,7 @@ private struct ModelDetail: View {
                         .disabled(library.isProcessing)
                 }
                 if model.supportsTextGeneration {
-                    Button("用于 AI 对话", systemImage: "bubble.left.and.bubble.right") { selectModel(model) }
+                    Button(LocalizedStringKey(model.needsTextCompatibilityCheck ? "尝试用于 AI 对话" : "用于 AI 对话"), systemImage: "bubble.left.and.bubble.right") { selectModel(model) }
                 }
             } header: {
                 Text("运行兼容性")

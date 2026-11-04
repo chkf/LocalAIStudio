@@ -230,3 +230,46 @@
 "第二文本编码器（bigG）" = "Second text encoder (bigG)";
 
 "此架构使用标准配套组件；转换后可在生图页指定兼容的 Draw Things VAE／文本编码器。" = "This architecture uses standard components. After conversion, select compatible Draw Things VAE/text encoders on the Generate page.";
+
+"生成历史" = "Generated images";
+
+"暂无生成图片" = "No generated images";
+
+"生成的图片会保存在这里，重新打开 App 后仍可查看和分享。" = "Generated images are kept here for viewing and sharing after reopening the app.";
+
+"删除这张图片？" = "Delete this image?";
+
+"图片历史" = "Image history";
+
+"生成图片" = "Generated image";
+
+"删除图片" = "Delete image";
+
+"无法预览图片" = "Cannot preview image";
+
+"尝试用于 AI 对话" = "Try AI chat";
+
+"删除异常条目" = "Delete invalid entry";
+
+"重新检查异常条目" = "Recheck invalid entries";
+
+"需要处理的模型" = "Models needing attention";
+
+"这些文件已保留，未计入上方文件占用。可以重试检查，或删除条目后从原始文件重新导入。其他模型仍可使用。" = "These files are preserved and are not included in the storage total above. Recheck them, or delete the entries and import the original files again. Other models remain available.";
+
+"删除异常模型？" = "Delete invalid model?";
+
+"这会删除该条目在 App 内保存的文件。请保留原始文件，以便重新导入。其他模型不会被删除。" = "This deletes the files stored for this entry in the app. Keep the original files to import them again. Other models will not be deleted.";
+
+"下载管理未能打开，本机模型仍可使用。下载文件已保留，请重试。" = "Download management could not open. Local models remain available and downloaded files are preserved. Try again.";
+
+"重新打开下载管理" = "Reopen download management";
+
+"准备聊天…" = "Preparing chat…";
+"准备任务" = "Preparing task";
+"准备生图…" = "Preparing image generation…";
+"准备生图资源…" = "Preparing image resources…";
+"本地语音" = "Local speech";
+"准备录音…" = "Preparing recording…";
+"录音中" = "Recording";
+"导入模型" = "Import model";

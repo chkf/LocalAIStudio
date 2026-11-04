@@ -13,7 +13,7 @@ enum ModelKind: String, Codable, Sendable {
 
 /// Header-only identification. Similar language-model families remain ambiguous without config.json.
 enum ModelIdentity {
-    static let version = 1
+    static let version = 2
 
     struct Result {
         var architecture: String?
@@ -30,14 +30,16 @@ enum ModelIdentity {
             .compactMap { metadata[$0]?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
         let adapterKind: ModelKind? = lokr ? .lokr : (lora ? .lora : nil)
         var architecture: String?
+        // FLUX.1 also contains single blocks 19 and 23. Match its distinct signature
+        // before the smaller FLUX.2 variants, while keeping full FLUX.2 precedence.
         if contains("single_blocks.39.linear1") || contains("single_transformer_blocks.39.attn.to_qkv_mlp_proj") {
             architecture = "flux2"
+        } else if contains("double_blocks.18.img_attn.qkv") || contains("single_transformer_blocks.37.proj_mlp") {
+            architecture = "flux1"
         } else if contains("single_blocks.23.linear1") || contains("single_transformer_blocks.23.attn.to_qkv_mlp_proj") {
             architecture = "flux2_9b"
         } else if contains("single_blocks.19.linear1") || contains("single_transformer_blocks.19.attn.to_qkv_mlp_proj") {
             architecture = "flux2_4b"
-        } else if contains("double_blocks.18.img_attn.qkv") || contains("single_transformer_blocks.37.proj_mlp") {
-            architecture = "flux1"
         } else if contains("transformer_blocks.59.txt_mlp") {
             architecture = "qwen_image"
         } else if contains("layers.29.feed_forward.w3") && contains("x_embedder") {

@@ -45,6 +45,32 @@ final class ModelIdentityTests: XCTestCase {
         }
     }
 
+    func testFullFluxLayoutsDoNotCollideWithSmallerVariants() {
+        for prefix in ["", "model.diffusion_model."] {
+            var flux1 = Dictionary(uniqueKeysWithValues: (0..<38).map {
+                ("\(prefix)single_blocks.\($0).linear1.weight", [UInt64(16), 16])
+            })
+            for index in 0..<19 { flux1["\(prefix)double_blocks.\(index).img_attn.qkv.weight"] = [16, 16] }
+            for metadata in [[:], ["modelspec.architecture": "FLUX.1-dev"]] {
+                let result = ModelIdentity.identify(metadata: metadata, tensors: flux1)
+                XCTAssertEqual(result.architecture, "flux1")
+                XCTAssertEqual(result.kind, .image)
+            }
+        }
+        let diffusers = Dictionary(uniqueKeysWithValues: (0..<38).map {
+            ("single_transformer_blocks.\($0).proj_mlp.weight", [UInt64(16), 16])
+        })
+        XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: diffusers).architecture, "flux1")
+        for (count, expected) in [(40, "flux2"), (24, "flux2_9b"), (20, "flux2_4b")] {
+            for pattern in ["single_blocks.%d.linear1.weight", "single_transformer_blocks.%d.attn.to_qkv_mlp_proj.weight"] {
+                let tensors = Dictionary(uniqueKeysWithValues: (0..<count).map {
+                    (String(format: pattern, $0), [UInt64(16), 16])
+                })
+                XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: tensors).architecture, expected)
+            }
+        }
+    }
+
     func testComponentAndUnknownRoles() {
         XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["encoder.conv_in.weight": [4], "decoder.conv_out.weight": [4]]).kind, .vae)
         XCTAssertEqual(ModelIdentity.identify(metadata: [:], tensors: ["text_model.encoder.layers.0.self_attn.q_proj.weight": [16, 16]]).kind, .textEncoder)
@@ -115,10 +141,24 @@ final class ModelIdentityTests: XCTestCase {
             let model = LocalModel(id: UUID(), name: "model.gguf", byteCount: 1, importedAt: .now,
                 format: .gguf, architecture: architecture, quantization: nil, adapter: nil,
                 validationNote: "metadata", kind: inspection.kind)
-            XCTAssertEqual(model.supportsTextGeneration, kind == .text)
+            XCTAssertEqual(model.supportsTextGeneration, kind == .text || kind == .unknown)
+            XCTAssertEqual(model.needsTextCompatibilityCheck, kind == .unknown)
             XCTAssertFalse(model.supportsImageGeneration)
         }
         XCTAssertEqual(try inspectGGUF(architecture: "clip", vision: true).kind, .visionEncoder)
+    }
+
+    func testUnlistedGGUFArchitecturesCanBeValidatedByTheBackend() throws {
+        for architecture in ["smollm3", "exaone", "cohere2", "jais", "nemotron"] {
+            let inspection = try inspectGGUF(architecture: architecture)
+            XCTAssertEqual(inspection.kind, .unknown)
+            XCTAssertEqual(inspection.architecture, architecture)
+            let model = LocalModel(id: UUID(), name: "model.gguf", byteCount: 1, importedAt: .now,
+                format: .gguf, architecture: architecture, quantization: nil, adapter: nil,
+                validationNote: inspection.note, kind: inspection.kind)
+            XCTAssertTrue(model.supportsTextGeneration)
+            XCTAssertTrue(model.needsTextCompatibilityCheck)
+        }
     }
 
     private func inspectGGUF(architecture: String, vision: Bool = false) throws -> ModelInspection {

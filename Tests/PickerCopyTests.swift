@@ -30,7 +30,7 @@ final class PickerCopyTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: original), data)
         XCTAssertEqual(try XCTUnwrap(FileManager.default.attributesOfItem(atPath: destination.path)[.systemFileNumber] as? NSNumber), inode)
         try await files.discardPickerCopies([copy])
-        let models = try await files.list()
+        let models = (try await files.list()).models
         XCTAssertEqual(models, [model])
     }
 
@@ -47,7 +47,7 @@ final class PickerCopyTests: XCTestCase {
         try await files.discardPickerCopies([imported, pending])
         XCTAssertFalse(FileManager.default.fileExists(atPath: imported.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: pending.path))
-        let models = try await files.list()
+        let models = (try await files.list()).models
         XCTAssertEqual(models, [model])
     }
 
@@ -82,7 +82,7 @@ final class PickerCopyTests: XCTestCase {
         catch is CancellationError { }
         try await files.discardPickerCopies([copy])
         XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
-        let models = try await files.list()
+        let models = (try await files.list()).models
         XCTAssertTrue(models.isEmpty)
     }
 

@@ -6,6 +6,8 @@ struct SpeechModelsPage: View {
     @Environment(ChatSession.self) private var chat
     @Environment(ImageGenerationSession.self) private var images
     @Environment(ModelLibrary.self) private var library
+    @Environment(TaskPreparation.self) private var preparation
+    @Environment(\.scenePhase) private var scenePhase
     @State private var importing = false
     @State private var pendingDelete: SpeechModel?
     @State private var sample = "你好，这是本地语音朗读。Hello from AI Studio."
@@ -40,13 +42,13 @@ struct SpeechModelsPage: View {
                     else {
                         speech.speak(sample, language: chat.preferences.speechLanguage,
                                      voiceIdentifier: chat.preferences.voiceIdentifier) {
-                            guard !chat.isBusy, !images.isGenerating, !library.isProcessing else { return false }
+                            guard !chat.isBusy, !images.isGenerating, !library.isProcessing, !preparation.isPreparing, scenePhase == .active else { return false }
                             await chat.unload()
-                            return !images.isGenerating && !library.isProcessing
+                            return !images.isGenerating && !library.isProcessing && !preparation.isPreparing && scenePhase == .active
                         }
                     }
                 }
-                .disabled(chat.isBusy || images.isGenerating || library.isProcessing || sample.isEmpty)
+                .disabled(chat.isBusy || images.isGenerating || library.isProcessing || preparation.isPreparing || sample.isEmpty)
             }
             Section("添加语音模型") {
                 Button("下载 Kokoro 中英文模型（约 151 MB）") { models.install() }

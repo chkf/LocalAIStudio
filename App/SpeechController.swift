@@ -1,10 +1,13 @@
 import AVFoundation
 import Observation
 import Speech
+import UIKit
 
 @MainActor @Observable
 final class SpeechController {
     private(set) var isRecording = false
+    private(set) var isStartingRecording = false
+    @ObservationIgnored private var recordingID: UUID?
     var errorMessage: String?
     let models = SpeechModels()
     private(set) var isSynthesizing = false
@@ -109,12 +112,22 @@ final class SpeechController {
     }
 
     func startTranscription(language: String, onText: @escaping @MainActor (String) -> Void) async {
-        guard !isRecording else { return }
+        guard !isRecording, !isStartingRecording, UIApplication.shared.applicationState != .background else { return }
+        let id = UUID()
+        recordingID = id
+        isStartingRecording = true
+        defer {
+            if recordingID == id, !isRecording {
+                recordingID = nil
+                isStartingRecording = false
+            }
+        }
         let authorized = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
             }
         }
+        guard recordingID == id, !Task.isCancelled else { return }
         guard authorized else {
             errorMessage = "请在系统设置中允许语音识别权限。"
             return
@@ -124,6 +137,7 @@ final class SpeechController {
                 continuation.resume(returning: granted)
             }
         }
+        guard recordingID == id, !Task.isCancelled else { return }
         guard microphoneAllowed else {
             errorMessage = "请在系统设置中允许麦克风权限。"
             return
@@ -136,6 +150,7 @@ final class SpeechController {
 
         do {
             await stopAndWait()
+            guard recordingID == id, !Task.isCancelled, UIApplication.shared.applicationState != .background else { return }
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try session.setActive(true)
@@ -152,7 +167,7 @@ final class SpeechController {
             audioEngine = engine
             recognitionTask = recognizer.recognitionTask(with: audioRequest) { [weak self] result, error in
                 Task { @MainActor [weak self] in
-                    guard let self, self.isRecording else { return }
+                    guard let self, self.recordingID == id, self.isRecording else { return }
                     if let result { onText(result.bestTranscription.formattedString) }
                     if let error { self.errorMessage = error.localizedDescription }
                     if error != nil || result?.isFinal == true { self.stopTranscription() }
@@ -160,13 +175,17 @@ final class SpeechController {
             }
             try engine.start()
             isRecording = true
+            isStartingRecording = false
         } catch {
+            guard recordingID == id else { return }
             stopTranscription()
             errorMessage = "无法开始录音：\(error.localizedDescription)"
         }
     }
 
     func stopTranscription() {
+        recordingID = nil
+        isStartingRecording = false
         isRecording = false
         if let engine = audioEngine {
             engine.stop()

@@ -34,10 +34,10 @@ final class MLXFolderTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: files.fileURL(for: model)
             .appendingPathComponent("model.safetensors").path))
         let reopened = try ModelFiles(directory: root.appendingPathComponent("Models"))
-        let library = try await reopened.list()
+        let library = (try await reopened.list()).models
         XCTAssertEqual(library, [model])
         try await reopened.delete(model)
-        let afterDeletion = try await reopened.list()
+        let afterDeletion = (try await reopened.list()).models
         XCTAssertTrue(afterDeletion.isEmpty)
 
         let incomplete = root.appendingPathComponent("incomplete")

@@ -6,6 +6,10 @@ struct GeneratePage: View {
     @Environment(SpeechController.self) private var speech
     @Environment(ChatSession.self) private var chat
     @Environment(ImageGenerationSession.self) private var generator
+    @Environment(TaskPreparation.self) private var preparation
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var generationTask: Task<Void, Never>?
+    @State private var preparationID: UUID?
     @AppStorage("imageModelID") private var selectedID = ""
     private enum Field: Hashable { case prompt, negativePrompt }
     @FocusState private var focusedField: Field?
@@ -48,21 +52,8 @@ struct GeneratePage: View {
                         if let selectedModel {
                             NavigationLink("模型与配套组件") { ImageModelSettingsPage(model: selectedModel) }
                                 .disabled(generator.isGenerating || library.isProcessing)
-                            Button("检查并下载配套资源") {
-                                focusedField = nil
-                                Task {
-                                    guard !library.isProcessing else { return }
-                                    await speech.stopAndWait()
-                                    await chat.unload()
-                                    guard !library.isProcessing else { return }
-                                    do {
-                                        await generator.prepareResources(model: selectedModel,
-                                            sourceURL: try library.fileURL(for: selectedModel),
-                                            components: try library.imageComponents(for: selectedModel))
-                                    } catch { generator.errorMessage = error.localizedDescription }
-                                }
-                            }
-                            .disabled(generator.isGenerating || library.isProcessing)
+                            Button("检查并下载配套资源") { start(selectedModel, prepareOnly: true) }
+                                .disabled(busy || preparation.isPreparing || library.isProcessing)
                         }
                         Picker("LoRA", selection: $loraID) {
                             Text("不使用").tag("")
@@ -102,43 +93,22 @@ struct GeneratePage: View {
                         }
                         .pickerStyle(.menu)
                         Button {
-                            focusedField = nil
-                            if generator.isGenerating {
-                                generator.cancel()
-                            } else if let selectedModel {
-                                Task {
-                                    guard !library.isProcessing else { return }
-                                    await speech.stopAndWait()
-                                    await chat.unload()
-                                    guard !library.isProcessing else { return }
-                                    do {
-                                        let url = try library.fileURL(for: selectedModel)
-                                        let adapter = library.models.first { $0.id.uuidString == loraID }
-                                        let selectedLoRA = try adapter.map { (model: $0, url: try library.fileURL(for: $0), weight: loraWeight) }
-                                        await generator.generate(model: selectedModel, sourceURL: url,
-                                                                 prompt: prompt, negativePrompt: negativePrompt,
-                                                                 size: size, steps: steps, lora: selectedLoRA,
-                                                                 components: try library.imageComponents(for: selectedModel))
-                                    } catch { generator.errorMessage = error.localizedDescription }
-                                }
-                            }
+                            if busy { stop() }
+                            else if let selectedModel { start(selectedModel, prepareOnly: false) }
                         } label: {
-                            Label(generator.isGenerating ? "取消生成" : "生成",
-                                  systemImage: generator.isGenerating ? "stop.fill" : "sparkles")
+                            Label(busy ? "取消生成" : "生成",
+                                  systemImage: busy ? "stop.fill" : "sparkles")
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(library.isProcessing || (!generator.isGenerating && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                        .disabled(!busy && (library.isProcessing || preparation.isPreparing || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                         .accessibilityIdentifier("generateImage")
-                        if generator.isGenerating {
-                            ProgressView(generator.status)
+                        if busy {
+                            ProgressView(LocalizedStringKey(generator.isGenerating ? generator.status : "准备生图…"))
                         } else if !generator.status.isEmpty {
                             Text(generator.status).foregroundStyle(.secondary)
                         }
-                        if let url = generator.resultURL, let picture = UIImage(contentsOfFile: url.path) {
-                            Image(uiImage: picture)
-                                .resizable()
-                                .scaledToFit()
-                                .clipShape(RoundedRectangle(cornerRadius: 18))
+                        if let url = generator.resultURL {
+                            GeneratedImagePreview(url: url)
                             ShareLink("分享或保存图片", item: url)
                                 .buttonStyle(.bordered)
                         }
@@ -151,6 +121,10 @@ struct GeneratePage: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("生图")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink("生成历史", systemImage: "clock.arrow.circlepath") { ImageHistoryPage() }
+                        .accessibilityIdentifier("imageHistory")
+                }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("收起键盘", systemImage: "keyboard.chevron.compact.down") { focusedField = nil }
@@ -164,6 +138,9 @@ struct GeneratePage: View {
                 }
             }
             .onDisappear { focusedField = nil }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background { stop() }
+            }
             .onAppear { if selectedModel == nil { selectedID = supported.first?.id.uuidString ?? "" } }
             .onChange(of: selectedID) { _, _ in loraID = "" }
             .onChange(of: supported.count) { _, _ in
@@ -179,4 +156,50 @@ struct GeneratePage: View {
             }
         }
     }
+    private var busy: Bool { generationTask != nil || generator.isGenerating }
+
+    private func start(_ model: LocalModel, prepareOnly: Bool) {
+        guard !busy, !library.isProcessing,
+              let request = preparation.begin(prepareOnly ? "准备生图资源…" : "准备生图…") else { return }
+        focusedField = nil
+        preparationID = request
+        generationTask = Task {
+            defer {
+                preparation.finish(request)
+                preparationID = nil
+                generationTask = nil
+            }
+            do {
+                try Task.checkCancellation()
+                guard preparation.isCurrent(request), UIApplication.shared.applicationState == .active else { return }
+                await speech.stopAndWait()
+                try Task.checkCancellation()
+                guard preparation.isCurrent(request), UIApplication.shared.applicationState == .active else { return }
+                await chat.unload()
+                try Task.checkCancellation()
+                guard preparation.isCurrent(request), UIApplication.shared.applicationState == .active,
+                      !library.isProcessing else { return }
+                let url = try library.fileURL(for: model)
+                let components = try library.imageComponents(for: model)
+                preparation.finish(request)
+                if prepareOnly {
+                    await generator.prepareResources(model: model, sourceURL: url, components: components)
+                } else {
+                    let adapter = library.models.first { $0.id.uuidString == loraID }
+                    let selectedLoRA = try adapter.map { (model: $0, url: try library.fileURL(for: $0), weight: loraWeight) }
+                    await generator.generate(model: model, sourceURL: url,
+                        prompt: prompt, negativePrompt: negativePrompt, size: size, steps: steps,
+                        lora: selectedLoRA, components: components)
+                }
+            } catch is CancellationError { }
+            catch { generator.errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func stop() {
+        if let preparationID { preparation.finish(preparationID) }
+        generationTask?.cancel()
+        generator.cancel()
+    }
+
 }

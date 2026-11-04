@@ -23,14 +23,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run portable model identification tests
-        run: swift test --package-path Validation
+      - name: Run portable logic and regression tests
+        run: |
+          swift test --package-path Validation
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v
 
       - name: Generate Xcode project
         run: |
           xcodebuild -version
           brew install xcodegen
           xcodegen generate
+
+      - name: Resolve packages and patch the pinned image importer
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project LocalAIStudio.xcodeproj \
+            -scheme LocalAIStudio \
+            -derivedDataPath DerivedData
+          python3 scripts/patch_model_importer.py DerivedData/SourcePackages/checkouts
 
       - name: Build iPhone app without signing
         run: |
@@ -64,6 +74,8 @@ jobs:
               assert info.get('NSMicrophoneUsageDescription'), 'Missing microphone permission description'
               assert info.get('NSSpeechRecognitionUsageDescription'), 'Missing speech-recognition permission description'
               assert ipa.getinfo(app + 'en.lproj/Localizable.strings').file_size > 0, 'Missing English app localization'
+              for resource in ('models.json', 'configs.json'):
+                  assert ipa.getinfo(app + resource).file_size > 0, f'Missing image catalog: {resource}'
               assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
               assert ipa.getinfo(app + 'Frameworks/CLiteRTLM.framework/CLiteRTLM').file_size > 0
               assert ipa.getinfo(app + 'Frameworks/MLXBackend.framework/MLXBackend').file_size > 0

@@ -13,7 +13,11 @@ A lightweight native iOS app for on-device AI, model files and device monitoring
 - **模型与配套组件** lists VAE and encoder dependencies, local/cache status, and lets users bind imported compatible Draw Things `.ckpt` components. Settings persist per model; standard files are cached separately. Custom files use private runtime aliases so catalog checksum handling cannot replace them.
 - A Draw Things checkpoint with a custom filename can be assigned a matching base profile. Raw PyTorch `.ckpt`, external-data checkpoints and unknown/incompatible profiles are rejected with actionable errors. A matching profile/container is still not proof of weight compatibility.
 - SD1/SD2/SDXL conversion accepts compatible raw Safetensors VAE and text encoders (SDXL Base needs both CLIP-L and bigG when absent from the checkpoint). Other architectures use standard or preconverted Draw Things components; arbitrary raw VAE/encoder conversion is not supported.
-- These fixes were checked locally without triggering GitHub Actions. The SwiftUI interaction, iOS compilation and actual image inference still need device validation.
+- FLUX.1 and FLUX.2 full tensor layouts have separate regression checks. Unrecognized GGUF architectures can be tried through llama.cpp; known encoders, adapters and image roles stay excluded from chat.
+- A damaged model entry is listed separately with retry/delete recovery; healthy models remain available. A damaged download record does not block the imported library.
+- Generated PNGs have a history page with previews, sharing and deletion. Completed images survive relaunches, and interrupted writes are discarded.
+- Pending chat/image starts can be cancelled while the previous runtime is stopping. MLX unloading waits for the underlying computation to finish; System shows preparation, image generation, conversion, local speech, recording and transfers as well as chat.
+- PR updates and main-branch pushes automatically run validation and build the IPA. Actual model inference and SwiftUI interaction still require iPhone validation; see the PR's latest Actions result for compilation status.
 
 ## Model identification and processing in 0.5.0 (7)
 
@@ -72,7 +76,7 @@ The previous simulator tests used tiny files inside the app's exposed Debug Docu
 - Public HTTPS/Hugging Face `resolve` links support progress, pause/cancel and conditional resume. Repository pages, authenticated repositories and CivitAI parsing are not implemented. Backgrounding pauses downloads. Continuation depends on the server and retained temporary data.
 - The official pinned LiteRT-LM Swift package provides text loading, streaming, cancellation, unloading and conversation/input recovery. Native initialization itself is not immediately cancellable. One heavy task runs at a time; dynamic context is capped at 2,048 tokens and output at 512. Backgrounding requests cancellation/unload, not continued inference.
 - Model load timing and engine-reported TTFT/tokens/s are recorded when available. File size is not treated as peak RAM; iOS can terminate a process before a memory warning.
-- Image-to-chat input, direct audio-to-model input, separately downloaded Kokoro/Parakeet engines, image history/gallery, LoKr and chat-adapter application, universal Checkpoint conversion, WidgetKit, App Intents, Live Activities and continuous cross-app monitoring are **not implemented**. Image LoRA and compatible Safetensors conversion are described above. Native device dictation and speech playback are separate from model audio input.
+- Image-to-chat input, direct audio-to-model input, Parakeet, LoKr and chat-adapter application, universal Checkpoint conversion, WidgetKit, App Intents, Live Activities and continuous cross-app monitoring are **not implemented**. Kokoro downloads, image history, image LoRA and compatible Safetensors conversion are described here. Native device dictation and speech playback are separate from model audio input.
 
 ## Build and verification
 
@@ -81,10 +85,16 @@ Windows/WSL2 can edit the project. GitHub Actions uses the Xcode 27 macOS runner
 ```sh
 export GIT_LFS_SKIP_SMUDGE=1
 xcodegen generate
+xcodebuild -resolvePackageDependencies -project LocalAIStudio.xcodeproj \
+  -scheme LocalAIStudio -derivedDataPath DerivedData
+python3 scripts/patch_model_importer.py DerivedData/SourcePackages/checkouts
 xcodebuild -skipMacroValidation -project LocalAIStudio.xcodeproj -scheme LocalAIStudio \
   -configuration Release -destination 'generic/platform=iOS' \
+  -derivedDataPath DerivedData \
   CODE_SIGNING_ALLOWED=NO build
 ```
+
+The build applies a one-line patch to the pinned Draw Things importer so missing SD1/SD2 tensors throw an error instead of reaching `try!`. The script checks the exact dependency revision and source hash, is safe to rerun, and refuses unknown versions. It must run after package resolution for local builds too. This addresses that forced-error path, not every malformed native tensor or graph.
 
 The full simulator suite uses the fixtures prepared by [.github/workflows/ios.yml](.github/workflows/ios.yml). A separate `ImportFixtureHost` app exposes the source Documents folder; only simulator tests build/install it, and it is not included in the IPA. AI Studio uses the same document configuration in Debug and Release, with file sharing disabled in both. CI verifies that external source files are unchanged after import, cancellation and retry. The final IPA is checked for its visible display name and internal product metadata.
 
@@ -111,6 +121,8 @@ LiteRT-LM is pinned to official v0.18.1 and uses Apache-2.0; see [third-party no
 添加后选择模型、音色编号与语速，可试听，也用于消息菜单的「朗读」与「自动朗读回复」。系统语音仍是默认选项。Kokoro 合成前释放聊天模型，逐段生成并播放，结束或取消后释放 TTS 引擎；后台／内存警告会停止朗读。再次聊天会重新加载聊天模型。此版本不包含声音克隆。
 
 引擎固定为 sherpa-onnx v2.0.1，CPU 推理；内置下载固定上游模型快照，校验全部下载文件 SHA-256，取消或失败清理 staging。模型权重不随应用分发，使用须遵守模型来源页面及包内许可证。
+
+导入及加载前有界读取 ONNX 元数据，核对采样率、`n_speakers`、`510×1×256` 音色表及 token 格式，拦截已确认会导致原生库退出的配置错误。此预检不等同于完整 ONNX 计算图验证。
 
 
 ### Chat 联网工具

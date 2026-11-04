@@ -5,6 +5,7 @@ import os
 struct ChatPage: View {
     @Environment(ModelLibrary.self) private var library
     @Environment(ChatSession.self) private var chat
+    @Environment(TaskPreparation.self) private var preparation
     @Environment(ImageGenerationSession.self) private var images
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
@@ -117,8 +118,8 @@ struct ChatPage: View {
                             .lineLimit(1...6)
                             .focused($messageFocused)
                             .accessibilityIdentifier("chatInput")
-                        Button(speech.isRecording ? "结束语音输入" : "语音输入", systemImage: speech.isRecording ? "stop.circle.fill" : "mic") {
-                            if speech.isRecording { speech.stopTranscription() }
+                        Button(speech.isRecording || speech.isStartingRecording ? "结束语音输入" : "语音输入", systemImage: speech.isRecording || speech.isStartingRecording ? "stop.circle.fill" : "mic") {
+                            if speech.isRecording || speech.isStartingRecording { speech.stopTranscription() }
                             else {
                                 messageFocused = false
                                 let existing = chat.draft
@@ -139,7 +140,7 @@ struct ChatPage: View {
                         } else {
                             Button("发送", systemImage: "arrow.up") { attemptSend() }
                                 .labelStyle(.iconOnly).buttonStyle(.borderedProminent)
-                                .disabled(selectedModel == nil || chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                .disabled(selectedModel == nil || preparation.isPreparing || library.isProcessing || chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                                 .accessibilityIdentifier("sendMessage")
                         }
                     }
@@ -244,17 +245,23 @@ struct ChatPage: View {
     }
 
     private func send() {
-        guard let model = selectedModel, !busy, !library.isProcessing else { return }
+        guard let model = selectedModel, !busy, !library.isProcessing,
+              let request = preparation.begin("准备聊天…") else { return }
         messageFocused = false
         sendTask = Task {
-            defer { sendTask = nil }
+            defer { preparation.finish(request); sendTask = nil }
             do {
                 try Task.checkCancellation()
                 guard UIApplication.shared.applicationState == .active else { return }
                 guard !library.isProcessing else { return }
                 await speech.stopAndWait()
+                try Task.checkCancellation()
+                guard preparation.isCurrent(request), UIApplication.shared.applicationState == .active else { return }
                 await images.stop()
-                guard !library.isProcessing else { return }
+                try Task.checkCancellation()
+                guard preparation.isCurrent(request), UIApplication.shared.applicationState == .active,
+                      !library.isProcessing else { return }
+                preparation.finish(request)
                 await chat.send(model: model, fileURL: try library.fileURL(for: model))
             } catch is CancellationError {
                 return
@@ -264,16 +271,17 @@ struct ChatPage: View {
     }
 
     private func speak(_ text: String) {
-        guard scenePhase == .active, !chat.isBusy, !images.isGenerating, !library.isProcessing else { return }
+        guard scenePhase == .active, !chat.isBusy, !images.isGenerating, !library.isProcessing, !preparation.isPreparing else { return }
         speech.speak(text, language: chat.preferences.speechLanguage,
                      voiceIdentifier: chat.preferences.voiceIdentifier) {
-            guard !chat.isBusy, !images.isGenerating, !library.isProcessing else { return false }
+            guard !chat.isBusy, !images.isGenerating, !library.isProcessing, !preparation.isPreparing else { return false }
             await chat.unload()
-            return !images.isGenerating && !library.isProcessing && scenePhase == .active
+            return !images.isGenerating && !library.isProcessing && !preparation.isPreparing && scenePhase == .active
         }
     }
 
     private func stop() {
+        preparation.cancel()
         sendTask?.cancel()
         chat.cancel()
     }

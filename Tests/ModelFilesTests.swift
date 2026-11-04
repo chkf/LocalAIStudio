@@ -13,6 +13,23 @@ final class ModelFilesTests: XCTestCase {
         try FileManager.default.removeItem(at: directory)
     }
 
+    func testCancelledScanDoesNotPublishCorruptEntries() async throws {
+        let store = try ModelFiles(directory: directory.appendingPathComponent("Models"))
+        let source = try write("test.safetensors", data: safetensors())
+        let imported = try await store.importFile(from: source)
+        let scan = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await store.list()
+        }
+        do {
+            _ = try await scan.value
+            XCTFail("A cancelled scan must not publish a partial inventory")
+        } catch is CancellationError { }
+        let inventory = try await store.list()
+        XCTAssertEqual(inventory.models.map(\.id), [imported.id])
+        XCTAssertTrue(inventory.issues.isEmpty)
+    }
+
     func testImportPreservesSourceAndDuplicateNamesHaveIndependentFiles() async throws {
         let store = try ModelFiles(directory: directory.appendingPathComponent("Models"))
         let source = try write("test.safetensors", data: safetensors())
@@ -24,10 +41,10 @@ final class ModelFilesTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
         let saved = store.fileURL(for: first)
         XCTAssertEqual(try Data(contentsOf: saved), try Data(contentsOf: source))
-        let models = try await store.list()
+        let models = (try await store.list()).models
         XCTAssertEqual(models.count, 2)
         try await store.delete(first)
-        let remaining = try await store.list()
+        let remaining = (try await store.list()).models
         XCTAssertEqual(remaining.map(\.id), [second.id])
         XCTAssertFalse(FileManager.default.fileExists(atPath: saved.path))
     }
@@ -38,7 +55,7 @@ final class ModelFilesTests: XCTestCase {
         let source = try write("model.bin", data: safetensors())
         let imported = try await store.importFile(from: source)
         let reloaded = try ModelFiles(directory: root)
-        let models = try await reloaded.list()
+        let models = (try await reloaded.list()).models
         XCTAssertEqual(models, [imported])
         XCTAssertEqual(try root.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
     }
@@ -57,7 +74,7 @@ final class ModelFilesTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: weightURL), try Data(contentsOf: source))
 
         let reloaded = try ModelFiles(directory: root)
-        let models = try await reloaded.list()
+        let models = (try await reloaded.list()).models
         XCTAssertEqual(models.first?.displayName, "我的模型")
         let inspected = try await reloaded.reinspect(renamed)
         XCTAssertEqual(inspected.title, "我的模型")
@@ -80,7 +97,7 @@ final class ModelFilesTests: XCTestCase {
         old["imageConfiguration"] = ["template": "sd_xl_base_1.0_f16.ckpt", "components": [String: String]()] as [String: Any]
         try JSONSerialization.data(withJSONObject: old).write(to: metadata)
 
-        let migratedModels = try await store.list()
+        let migratedModels = (try await store.list()).models
         let migrated = try XCTUnwrap(migratedModels.first)
         XCTAssertEqual(migrated.architecture, "sdxl_base_v0.9")
         XCTAssertEqual(migrated.identificationVersion, ModelIdentity.version)
@@ -89,7 +106,7 @@ final class ModelFilesTests: XCTestCase {
         XCTAssertEqual(store.fileURL(for: migrated), payload)
         XCTAssertEqual(try Data(contentsOf: payload), try Data(contentsOf: source))
         let afterFirstLoad = try Data(contentsOf: metadata)
-        _ = try await store.list()
+        _ = (try await store.list()).models
         XCTAssertEqual(try Data(contentsOf: metadata), afterFirstLoad)
     }
 
@@ -149,7 +166,7 @@ final class ModelFilesTests: XCTestCase {
             _ = try await task.value
             XCTFail("Cancelled import unexpectedly succeeded.")
         } catch is CancellationError {
-            let models = try await store.list()
+            let models = (try await store.list()).models
             XCTAssertTrue(models.isEmpty)
             XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
         }
@@ -165,7 +182,7 @@ final class ModelFilesTests: XCTestCase {
         try Data([1, 2, 3]).write(to: staging.appendingPathComponent("payload"))
         let reloaded = try ModelFiles(directory: root)
         XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
-        let models = try await reloaded.list()
+        let models = (try await reloaded.list()).models
         XCTAssertEqual(models, [imported])
     }
 
@@ -180,25 +197,75 @@ final class ModelFilesTests: XCTestCase {
         let reloaded = try ModelFiles(directory: root)
         XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
         XCTAssertEqual(try Data(contentsOf: source), try safetensors())
-        let models = try await reloaded.list()
+        let models = (try await reloaded.list()).models
         XCTAssertTrue(models.isEmpty)
         let recovered = try await reloaded.importFile(from: source, name: "model.safetensors", link: true)
         XCTAssertEqual(recovered.format, .safetensors)
     }
 
-    func testCorruptLibraryMetadataIsReportedWithoutDeletingFile() async throws {
+    func testCorruptMetadataDoesNotHideHealthyModelsOrDeleteFiles() async throws {
         let root = directory.appendingPathComponent("Models")
         let store = try ModelFiles(directory: root)
         let source = try write("model.safetensors", data: safetensors())
-        let imported = try await store.importFile(from: source)
-        let saved = store.fileURL(for: imported)
+        let damaged = try await store.importFile(from: source)
+        let healthy = try await store.importFile(from: source)
+        let saved = store.fileURL(for: damaged)
+        let metadata = saved.deletingLastPathComponent().appendingPathComponent("metadata.json")
+        let originalMetadata = try Data(contentsOf: metadata)
+        try Data("broken json".utf8).write(to: metadata)
+
+        let inventory = try await store.list()
+        XCTAssertEqual(inventory.models, [healthy])
+        XCTAssertEqual(inventory.issues.map(\.id), [damaged.id])
+        XCTAssertFalse(try XCTUnwrap(inventory.issues.first).message.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: saved), try Data(contentsOf: source))
+
+        // Rechecking after a repaired record brings the entry back without importing twice.
+        try originalMetadata.write(to: metadata)
+        let recovered = try await store.list()
+        XCTAssertTrue(recovered.issues.isEmpty)
+        XCTAssertEqual(Set(recovered.models.map(\.id)), Set([damaged.id, healthy.id]))
+    }
+
+    func testDeletingInvalidEntryOnlyDeletesItsStoredCopy() async throws {
+        let root = directory.appendingPathComponent("Models")
+        let store = try ModelFiles(directory: root)
+        let source = try write("model.safetensors", data: safetensors())
+        let damaged = try await store.importFile(from: source)
+        let healthy = try await store.importFile(from: source)
+        let saved = store.fileURL(for: damaged)
         try Data("broken json".utf8).write(to: saved.deletingLastPathComponent().appendingPathComponent("metadata.json"))
-        do {
-            _ = try await store.list()
-            XCTFail("Damaged metadata must not be silently ignored.")
-        } catch {
-            XCTAssertTrue(FileManager.default.fileExists(atPath: saved.path))
-        }
+        let inventory = try await store.list()
+        try await store.deleteInvalidEntry(XCTUnwrap(inventory.issues.first))
+        let remaining = try await store.list()
+        XCTAssertEqual(remaining.models, [healthy])
+        XCTAssertTrue(remaining.issues.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: saved.path))
+        XCTAssertEqual(try Data(contentsOf: source), try safetensors())
+    }
+
+    func testFailedAutomaticReinspectionIsReportedAndPreservesConfiguration() async throws {
+        let store = try ModelFiles(directory: directory.appendingPathComponent("Models"))
+        let source = try write("model.safetensors", data: safetensors())
+        let damaged = try await store.importFile(from: source)
+        let healthy = try await store.importFile(from: source)
+        let saved = store.fileURL(for: damaged)
+        let metadata = saved.deletingLastPathComponent().appendingPathComponent("metadata.json")
+        var old = try JSONSerialization.jsonObject(with: Data(contentsOf: metadata)) as! [String: Any]
+        old["identificationVersion"] = 0
+        old["displayName"] = "My model"
+        old["imageConfiguration"] = ["template": "sd_xl_base_1.0_f16.ckpt", "components": [String: String]()] as [String: Any]
+        let previous = try JSONSerialization.data(withJSONObject: old)
+        try previous.write(to: metadata)
+        // Preserve byte count so header parsing, rather than the size check, catches this damage.
+        try Data(repeating: 0, count: Int(damaged.byteCount)).write(to: saved)
+        let inventory = try await store.list()
+        XCTAssertEqual(inventory.models, [healthy])
+        XCTAssertEqual(inventory.issues.map(\.id), [damaged.id])
+        XCTAssertEqual(inventory.issues.first?.name, "My model")
+        XCTAssertEqual(try Data(contentsOf: metadata), previous)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: saved.path))
+        XCTAssertEqual(try Data(contentsOf: source), try safetensors())
     }
 
     func testSafetensorsRecognizesActualAdapterKeysAndMetadata() throws {
@@ -282,7 +349,7 @@ final class ModelFilesTests: XCTestCase {
                 XCTFail("Directories and symbolic links must not be imported.")
             } catch { }
         }
-        let models = try await store.list()
+        let models = (try await store.list()).models
         XCTAssertTrue(models.isEmpty)
     }
 

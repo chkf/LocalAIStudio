@@ -1,5 +1,11 @@
 import Foundation
 
+struct ModelLibraryIssue: Identifiable, Sendable, Equatable {
+    let id: UUID
+    let name: String
+    let message: String
+}
+
 actor ModelFiles {
     private let directory: URL
     private let files = FileManager.default
@@ -24,38 +30,57 @@ actor ModelFiles {
         }
     }
 
-    func list() throws -> [LocalModel] {
-        let folders = try files.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles)
-        return try folders.compactMap { folder -> LocalModel? in
-            guard let id = UUID(uuidString: folder.lastPathComponent) else { return nil }
+    func list() throws -> (models: [LocalModel], issues: [ModelLibraryIssue]) {
+        try Task.checkCancellation()
+        let folders = try files.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], options: .skipsHiddenFiles)
+        var models: [LocalModel] = []
+        var issues: [ModelLibraryIssue] = []
+        for folder in folders {
+            try Task.checkCancellation()
+            guard let id = UUID(uuidString: folder.lastPathComponent) else { continue }
+            var name = folder.lastPathComponent
             do {
+                let folderValues = try folder.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                guard folderValues.isDirectory == true, folderValues.isSymbolicLink != true else {
+                    throw ModelFileError.invalidLibraryEntry(name)
+                }
                 let metadata = folder.appendingPathComponent("metadata.json")
-                let model = try JSONDecoder().decode(LocalModel.self, from: Data(contentsOf: metadata))
+                var model = try JSONDecoder().decode(LocalModel.self, from: Data(contentsOf: metadata))
+                name = model.title
                 let file = fileURL(for: model)
                 let values = try file.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey])
                 guard model.id == id, values.isSymbolicLink != true else {
-                    throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
+                    throw ModelFileError.invalidLibraryEntry(name)
                 }
                 if model.format == .drawThingsBundle {
-                    guard values.isDirectory == true else { throw ModelFileError.invalidLibraryEntry(model.name) }
+                    guard values.isDirectory == true else { throw ModelFileError.invalidLibraryEntry(name) }
                     _ = try ImageModelBundle.read(file)
                 } else if model.format == .mlxBundle {
                     guard values.isDirectory == true, try inspectMLXFolder(file).size == model.byteCount else {
-                        throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
+                        throw ModelFileError.invalidLibraryEntry(name)
                     }
                 } else {
                     guard values.isRegularFile == true, let size = values.fileSize, Int64(size) == model.byteCount else {
-                        throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
+                        throw ModelFileError.invalidLibraryEntry(name)
                     }
                 }
                 if model.format != .drawThingsBundle, (model.identificationVersion ?? 0) < ModelIdentity.version {
-                    return try reinspect(model)
+                    model = try reinspect(model)
                 }
-                return model
+                models.append(model)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
-                throw ModelFileError.invalidLibraryEntry(folder.lastPathComponent)
+                // Keep the files and expose a recovery action without blocking unrelated models.
+                issues.append(ModelLibraryIssue(id: id, name: name, message: error.localizedDescription))
             }
-        }.sorted { $0.importedAt > $1.importedAt }
+        }
+        return (models.sorted { $0.importedAt > $1.importedAt }, issues.sorted { $0.name < $1.name })
+    }
+
+    func deleteInvalidEntry(_ issue: ModelLibraryIssue) throws {
+        // Only a UUID directory owned by this model library can be removed.
+        try files.removeItem(at: directory.appendingPathComponent(issue.id.uuidString, isDirectory: true))
     }
 
     nonisolated func fileURL(for model: LocalModel) -> URL {

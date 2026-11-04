@@ -30,9 +30,11 @@ public actor MLXTextRuntime {
         self.temperature = temperature
         self.topP = topP
         self.topK = topK
-        container = try await LLMModelFactory.shared.loadContainer(
+        let loaded = try await LLMModelFactory.shared.loadContainer(
             from: directory, using: #huggingFaceTokenizerLoader()
         )
+        try Task.checkCancellation()
+        container = loaded
         return elapsed(start)
     }
 
@@ -56,31 +58,56 @@ public actor MLXTextRuntime {
                         chat.append(message.isUser ? .user(message.text) : .assistant(message.text))
                     }
                     chat.append(.user(prompt))
+                    try Task.checkCancellation()
                     let input = try await model.prepare(input: UserInput(chat: chat))
-                    let start = ContinuousClock.now
-                    let stream = try await model.generate(
-                        input: input,
-                        parameters: GenerateParameters(
-                            maxTokens: maxOutputTokens,
-                            temperature: temperature,
-                            topP: topP,
-                            topK: topK
-                        )
+                    try Task.checkCancellation()
+                    let parameters = GenerateParameters(
+                        maxTokens: maxOutputTokens,
+                        temperature: temperature,
+                        topP: topP,
+                        topK: topK
                     )
-                    var first: Double?
-                    for await result in stream {
+                    let start = ContinuousClock.now
+                    let (stream, computation) = try await model.perform(nonSendable: input) { context, input in
                         try Task.checkCancellation()
-                        switch result {
-                        case .chunk(let text):
-                            if first == nil { first = elapsed(start) }
-                            continuation.yield(text)
-                        case .info(let info):
-                            lastMetrics = Metrics(firstTokenSeconds: first,
-                                                  tokensPerSecond: info.tokensPerSecond,
-                                                  outputTokens: info.generationTokenCount)
-                        default:
-                            break
+                        let iterator = try TokenIterator(input: input, model: context.model, parameters: parameters)
+                        return MLXLMCommon.generateTask(
+                            promptTokenCount: input.text.tokens.size,
+                            modelConfiguration: context.configuration,
+                            tokenizer: context.tokenizer,
+                            iterator: iterator,
+                            toolCallPolicy: parameters.toolCallPolicy
+                        )
+                    }
+                    do {
+                        try await withTaskCancellationHandler {
+                            try Task.checkCancellation()
+                            var first: Double?
+                            for await result in stream {
+                                try Task.checkCancellation()
+                                switch result {
+                                case .chunk(let text):
+                                    if first == nil { first = elapsed(start) }
+                                    continuation.yield(text)
+                                case .info(let info):
+                                    lastMetrics = Metrics(firstTokenSeconds: first,
+                                                          tokensPerSecond: info.tokensPerSecond,
+                                                          outputTokens: info.generationTokenCount)
+                                default:
+                                    break
+                                }
+                            }
+                            await computation.value
+                            try Task.checkCancellation()
+                        } onCancel: {
+                            computation.cancel()
                         }
+                    } catch {
+                        computation.cancel()
+                        // Ending the output stream does not finish the GPU work. Drain the
+                        // actual generation task before unload can release or replace its model.
+                        await computation.value
+                        throw error
                     }
                     continuation.finish()
                 } catch {

@@ -103,7 +103,7 @@ final class DownloadRequestTests: XCTestCase {
         XCTAssertNil(download.transfer)
         XCTAssertFalse(FileManager.default.fileExists(atPath: completed.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: downloads.appendingPathComponent("transfer.json").path))
-        let models = try await files.list()
+        let models = (try await files.list()).models
         XCTAssertTrue(models.isEmpty)
     }
 
@@ -130,7 +130,7 @@ final class DownloadRequestTests: XCTestCase {
         XCTAssertEqual(imported.count, 1)
         XCTAssertEqual(imported.first?.format, .safetensors)
         XCTAssertFalse(FileManager.default.fileExists(atPath: completed.path))
-        let models = try await files.list()
+        let models = (try await files.list()).models
         XCTAssertEqual(models, imported)
     }
 

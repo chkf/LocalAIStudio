@@ -51,6 +51,7 @@ private struct MainView: View {
     @State private var generator = ImageGenerationSession()
     @State private var monitor = DeviceMonitor()
     @State private var speech = SpeechController()
+    @State private var preparation = TaskPreparation()
 
     var body: some View {
         TabView(selection: $selection) {
@@ -84,11 +85,13 @@ private struct MainView: View {
         .environment(generator)
         .environment(monitor)
         .environment(speech)
+        .environment(preparation)
         .task { await library.open() }
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { monitor.start() }
             else { monitor.stop() }
             if phase == .background {
+                preparation.cancel()
                 speech.stopSpeaking()
                 speech.stopTranscription()
                 speech.models.cancelInstall()
@@ -105,6 +108,8 @@ private struct MainView: View {
         }
         .onDisappear { monitor.stop() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            preparation.cancel()
+            speech.stopTranscription()
             speech.stopSpeaking()
             library.cancelProcessing()
             generator.cancel()

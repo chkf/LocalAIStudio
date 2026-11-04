@@ -10,9 +10,35 @@ final class ImageGenerationSession {
     private(set) var isGenerating = false
     private(set) var status = ""
     private(set) var resultURL: URL?
+    private(set) var history: [GeneratedImage] = []
+    var historyError: String?
     var errorMessage: String?
 
     @ObservationIgnored private var job: Task<Void, Never>?
+    @ObservationIgnored private let imageFiles = GeneratedImages(directory: GeneratedImages.defaultDirectory)
+
+    init() { refreshHistory() }
+
+    func refreshHistory() {
+        do {
+            history = try imageFiles.list()
+            if resultURL == nil || !history.contains(where: { $0.url == resultURL }) {
+                resultURL = history.first?.url
+            }
+            historyError = nil
+        } catch { historyError = error.localizedDescription }
+    }
+
+    @discardableResult
+    func deleteImage(_ image: GeneratedImage) -> Bool {
+        do {
+            try imageFiles.delete(image)
+            history.removeAll { $0.id == image.id }
+            if resultURL == image.url { resultURL = history.first?.url }
+            historyError = nil
+            return true
+        } catch { historyError = error.localizedDescription; return false }
+    }
 
     func prepareResources(model: LocalModel, sourceURL: URL, components: [String: URL]) async {
         await run(model: model, sourceURL: sourceURL, prompt: "", negativePrompt: "", size: 512, steps: 0,
@@ -35,7 +61,6 @@ final class ImageGenerationSession {
         isGenerating = true
         status = "准备生图模型…"
         errorMessage = nil
-        if !prepareOnly { resultURL = nil }
         let task = Task {
             do {
                 try Task.checkCancellation()
@@ -177,12 +202,8 @@ final class ImageGenerationSession {
                 guard let first = results.first else {
                     throw ImageGenerationError.noImage
                 }
-                let outputDirectory = URL.applicationSupportDirectory
-                    .appendingPathComponent("Generated", isDirectory: true)
-                try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-                let output = outputDirectory.appendingPathComponent(UUID().uuidString + ".png")
-                try first.write(to: output, type: .png)
-                resultURL = output
+                resultURL = try imageFiles.save { try first.write(to: $0, type: .png) }
+                refreshHistory()
                 status = "生成完成"
             } catch is CancellationError {
                 status = "已取消"

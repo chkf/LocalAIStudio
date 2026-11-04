@@ -48,7 +48,12 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
     var title: String { displayName ?? name }
 
     var supportsImageGeneration: Bool { format.supportsImageGeneration && adapter == nil && (kind == nil || kind == .image || (format == .checkpoint && kind == .unknown)) }
-    var supportsTextGeneration: Bool { format.supportsTextGeneration && adapter == nil && (kind == nil || kind == .text) }
+    var supportsTextGeneration: Bool {
+        format.supportsTextGeneration && adapter == nil &&
+            (kind == nil || kind == .text || (format == .gguf && kind == .unknown))
+    }
+
+    var needsTextCompatibilityCheck: Bool { format == .gguf && (kind == nil || kind == .unknown) }
 
     var identitySummary: String {
         let values = [kind?.rawValue, architecture].compactMap { $0 }
@@ -65,7 +70,12 @@ struct LocalModel: Identifiable, Codable, Sendable, Equatable {
             return "可尝试用 LiteRT-LM 加载；架构、量化与内存占用需实际验证。"
         }
         if format == .gguf {
-            return "可尝试用 llama.cpp 加载单文件 GGUF 文本模型；架构、聊天模板及内存需求需实际验证。"
+            if !supportsTextGeneration {
+                return "已识别为非对话模型。当前 GGUF 后端仅用于文本对话，此文件暂不能直接运行。"
+            }
+            return needsTextCompatibilityCheck
+                ? "尚未确认这个 GGUF 的用途，可尝试交给 llama.cpp 校验。只有兼容的文本模型才能对话；识别结果不代表后端一定不支持。"
+                : "可尝试用 llama.cpp 加载单文件 GGUF 文本模型；架构、聊天模板及内存需求需实际验证。"
         }
         if format == .mlxBundle {
             return "可尝试用 MLX Swift LM 加载本地模型目录；需完整的 config、tokenizer 与 Safetensors 权重，模型架构须受 MLX 支持。"
