@@ -34,7 +34,10 @@ struct GeneratedImages {
                 continue
             }
             guard entry.pathExtension == "png", let id = UUID(uuidString: name) else { continue }
-            images.append(GeneratedImage(id: id, url: entry,
+            // Darwin may resolve /var to /private/var during enumeration. Keep
+            // the same URL spelling as save() and delete() for result matching.
+            let imageURL = directory.appendingPathComponent(entry.lastPathComponent)
+            images.append(GeneratedImage(id: id, url: imageURL,
                 date: values.creationDate ?? values.contentModificationDate ?? .distantPast,
                 byteCount: Int64(values.fileSize ?? 0)))
         }
