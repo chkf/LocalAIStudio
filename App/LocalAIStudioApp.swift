@@ -4,6 +4,22 @@ import UIKit
 @main
 struct LocalAIStudioApp: App {
     @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("appLanguage") private var language = "zh-Hans"
+    @AppStorage("themeColor") private var themeColor = "green"
+
+    private var preferredLocale: Locale {
+        language == "system" ? .current : Locale(identifier: language)
+    }
+
+    private var accent: Color {
+        switch themeColor {
+        case "blue": .blue
+        case "purple": .purple
+        case "orange": .orange
+        case "pink": .pink
+        default: .green
+        }
+    }
 
     private var preferredScheme: ColorScheme? {
         switch appearance {
@@ -17,181 +33,187 @@ struct LocalAIStudioApp: App {
         WindowGroup {
             MainView()
                 .preferredColorScheme(preferredScheme)
+                .environment(\.locale, preferredLocale)
+                .tint(accent)
         }
     }
 }
 
-private enum Page: Hashable {
-    case chat, generate, device, models
-}
+private enum Page: Hashable { case chat, generate, device, models }
 
 private struct MainView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("chatModelID") private var selectedModelID = ""
+    @AppStorage("imageModelID") private var selectedImageModelID = ""
     @State private var selection: Page = .chat
+    @State private var library = ModelLibrary()
+    @State private var chat = ChatSession()
+    @State private var generator = ImageGenerationSession()
+    @State private var monitor = DeviceMonitor()
+    @State private var speech = SpeechController()
+    @State private var preparation = TaskPreparation()
 
     var body: some View {
         TabView(selection: $selection) {
             Tab("AI", systemImage: "bubble.left.and.bubble.right", value: Page.chat) {
-                ChatPage()
+                ChatPage(openModels: { selection = .models })
             }
             Tab("生图", systemImage: "photo", value: Page.generate) {
-                GeneratePage()
+                GeneratePage(openModels: { selection = .models })
             }
-            Tab("设备", systemImage: "waveform.path.ecg", value: Page.device) {
+            Tab("System", systemImage: "waveform.path.ecg", value: Page.device) {
                 DevicePage()
             }
             Tab("模型", systemImage: "square.stack.3d.up", value: Page.models) {
-                ModelsPage()
-            }
-        }
-        .tint(.green)
-    }
-}
-
-private struct InfoPanel: View {
-    let icon: String
-    let title: String
-    let detail: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title2)
-            Text(title)
-                .font(.headline)
-            Text(detail)
-                .foregroundStyle(.secondary)
-                .font(.subheadline)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .glassEffect(in: .rect(cornerRadius: 22))
-    }
-}
-
-private struct ChatPage: View {
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    InfoPanel(
-                        icon: "brain.head.profile",
-                        title: "本地对话",
-                        detail: "将支持 Gemma 4 E4B 和其他兼容模型。推理引擎尚未接入。"
-                    )
-                    InfoPanel(
-                        icon: "photo.on.rectangle",
-                        title: "多模态理解",
-                        detail: "图片输入、流式输出及模型切换将在接入引擎后提供。"
-                    )
+                ModelsPage { model in
+                    if model.supportsImageGeneration {
+                        selectedImageModelID = model.id.uuidString
+                        selection = .generate
+                    } else {
+                        Task {
+                            await generator.stop()
+                            await chat.unload()
+                            selectedModelID = model.id.uuidString
+                            selection = .chat
+                        }
+                    }
                 }
-                .padding()
             }
-            .navigationTitle("AI")
         }
-    }
-}
-
-private struct GeneratePage: View {
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    InfoPanel(
-                        icon: "wand.and.stars",
-                        title: "图像生成",
-                        detail: "计划支持兼容的本地 Checkpoint、LoRA 和图生图功能。"
-                    )
-                    InfoPanel(
-                        icon: "exclamationmark.circle",
-                        title: "尚未接入生图引擎",
-                        detail: "下载模型不代表可以运行；具体架构、量化格式需要逐一验证。"
-                    )
+        .environment(library)
+        .environment(chat)
+        .environment(generator)
+        .environment(monitor)
+        .environment(speech)
+        .environment(preparation)
+        .task { await library.open() }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { monitor.start() }
+            else { monitor.stop() }
+            if phase == .background {
+                preparation.cancel()
+                speech.stopSpeaking()
+                speech.stopTranscription()
+                speech.models.cancelInstall()
+                library.cancelImport()
+                library.cancelProcessing()
+                generator.cancel()
+                chat.saveDraft()
+                chat.cancel()
+                Task { await chat.unload() }
+                Task {
+                    await library.download?.pause()
                 }
-                .padding()
             }
-            .navigationTitle("生图")
         }
+        .onDisappear { monitor.stop() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            preparation.cancel()
+            speech.stopTranscription()
+            speech.stopSpeaking()
+            library.cancelProcessing()
+            generator.cancel()
+            chat.cancel()
+            Task { await chat.unload() }
+        }
+        .alert("操作未完成", isPresented: Binding(
+            get: { library.errorMessage != nil || library.download?.errorMessage != nil || chat.errorMessage != nil },
+            set: { if !$0 { clearError() } }
+        )) {
+            Button("好", role: .cancel) { clearError() }
+        } message: {
+            Text(library.errorMessage ?? library.download?.errorMessage ?? chat.errorMessage ?? "")
+        }
+    }
+
+    private func clearError() {
+        library.errorMessage = nil
+        library.download?.errorMessage = nil
+        chat.errorMessage = nil
     }
 }
 
-private struct DevicePage: View {
+struct SettingsButton: View {
+    @State private var isPresented = false
+
+    var body: some View {
+        Button("设置", systemImage: "gearshape") { isPresented = true }
+            .accessibilityIdentifier("settingsButton")
+            .sheet(isPresented: $isPresented) { SettingsPage() }
+    }
+}
+
+private struct SettingsPage: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @AppStorage("appearance") private var appearance = "system"
-    @State private var refreshedAt = Date()
-
-    private var thermalText: String {
-        switch ProcessInfo.processInfo.thermalState {
-        case .nominal: "正常"
-        case .fair: "偏热"
-        case .serious: "较热"
-        case .critical: "严重"
-        @unknown default: "未知"
-        }
-    }
-
-    private var batteryText: String {
-        let value = UIDevice.current.batteryLevel
-        return value >= 0 ? "\(Int(value * 100))%" : "未知"
-    }
+    @AppStorage("appLanguage") private var language = "zh-Hans"
+    @AppStorage("themeColor") private var themeColor = "green"
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("设备快照") {
-                    LabeledContent("总 RAM") {
-                        Text(ByteCountFormatter.string(
-                            fromByteCount: Int64(ProcessInfo.processInfo.physicalMemory),
-                            countStyle: .memory
-                        ))
-                    }
-                    LabeledContent("电量", value: batteryText)
-                    LabeledContent("热状态", value: thermalText)
-                    LabeledContent("处理器核心数", value: String(ProcessInfo.processInfo.processorCount))
-                    Button("刷新快照") { refreshedAt = .now }
-                    Text("更新于 \(refreshedAt.formatted(date: .omitted, time: .standard))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
                 Section("外观") {
                     Picker("主题", selection: $appearance) {
-                        Text("系统").tag("system")
+                        Text("跟随系统").tag("system")
                         Text("浅色").tag("light")
                         Text("深色").tag("dark")
                     }
                     .pickerStyle(.segmented)
+                    .accessibilityIdentifier("appearancePicker")
+                    Picker("语言", selection: $language) {
+                        Text("跟随系统").tag("system")
+                        Text("简体中文").tag("zh-Hans")
+                        Text("English").tag("en")
+                    }
+                    .accessibilityIdentifier("languagePicker")
+                    Picker("主题色", selection: $themeColor) {
+                        Text("绿色").tag("green")
+                        Text("蓝色").tag("blue")
+                        Text("紫色").tag("purple")
+                        Text("橙色").tag("orange")
+                        Text("粉色").tag("pink")
+                    }
+                    .accessibilityIdentifier("themeColorPicker")
                 }
                 Section {
-                    Text("App 内存峰值、推理性能与小组件将在引擎接入后实现；iOS 不开放全系统独立 GPU 显存指标。")
+                    LabeledContent("降低透明度", value: reduceTransparency ? "已开启" : "未开启")
+                    LabeledContent("减少动态效果", value: reduceMotion ? "已开启" : "未开启")
+                    LabeledContent("增加对比度", value: contrast == .increased ? "已开启" : "未开启")
+                } header: {
+                    Text("系统辅助功能")
+                } footer: {
+                    Text("玻璃效果和原生控件会遵循系统设置。可在 iPhone 的辅助功能中调整。")
+                }
+                Section("本机数据") {
+                    Text("模型由你下载或导入，不随 App 预装。对话和模型文件保存在这台设备上，删除 App 会一并移除。")
+                    Text("下载和推理在进入后台时暂停或停止；再次打开后可以继续下载或重新发送消息。")
                         .foregroundStyle(.secondary)
                 }
+                Section("开源许可") {
+                    NavigationLink("第三方组件") {
+                        ScrollView {
+                            Text(licenseText)
+                                .font(.footnote).textSelection(.enabled).padding()
+                        }
+                        .navigationTitle("第三方组件")
+                        .navigationBarTitleDisplayMode(.inline)
+                    }
+                }
             }
-            .navigationTitle("设备")
-            .onAppear {
-                UIDevice.current.isBatteryMonitoringEnabled = true
-                refreshedAt = .now
-            }
+            .navigationTitle("设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button("完成") { dismiss() }.accessibilityIdentifier("closeSettings") }
         }
     }
-}
 
-private struct ModelsPage: View {
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    InfoPanel(
-                        icon: "square.and.arrow.down",
-                        title: "模型库",
-                        detail: "计划支持本地文件导入、HTTPS 下载、模型格式识别与文件管理。"
-                    )
-                    InfoPanel(
-                        icon: "externaldrive",
-                        title: "文件保存在本机",
-                        detail: "不会预装多 GB 的模型；首版先完成下载与存储，再逐步连接推理引擎。"
-                    )
-                }
-                .padding()
-            }
-            .navigationTitle("模型")
+    private var licenseText: String {
+        guard let url = Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "txt") else {
+            return "LiteRT-LM — Apache License 2.0\nhttps://github.com/google-ai-edge/LiteRT-LM"
         }
+        do { return try String(contentsOf: url, encoding: .utf8) }
+        catch { return "无法读取许可文件：\(error.localizedDescription)" }
     }
 }

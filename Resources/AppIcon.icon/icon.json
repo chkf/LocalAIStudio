@@ -1,0 +1,89 @@
+{
+  "features": [
+    "refractivity"
+  ],
+  "fill-specializations": [
+    {
+      "value": {
+        "automatic-gradient": "srgb:0.98431,0.99216,0.99608,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": "system-dark"
+    }
+  ],
+  "groups": [
+    {
+      "name": "AI",
+      "layers": [
+        {
+          "image-name": "04-AI.svg",
+          "name": "AI",
+          "glass": false
+        }
+      ],
+      "lighting": "individual",
+      "specular": false,
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      }
+    },
+    {
+      "name": "Green glass",
+      "layers": [
+        {
+          "image-name": "02-GreenGlass.svg",
+          "name": "Green glass",
+          "glass": true
+        }
+      ],
+      "lighting": "individual",
+      "refractivity": {
+        "depth": 0.08,
+        "enabled": false,
+        "strength": 0.1
+      },
+      "specular": true,
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.05
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "opacity": 1
+    },
+    {
+      "name": "Blue glass",
+      "layers": [
+        {
+          "image-name": "01-BlueGlass.svg",
+          "name": "Blue glass",
+          "glass": true
+        }
+      ],
+      "lighting": "individual",
+      "refractivity": {
+        "depth": 0.08,
+        "enabled": false,
+        "strength": 0.1
+      },
+      "specular": true,
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.05
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "opacity": 1
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

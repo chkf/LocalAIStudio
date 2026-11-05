@@ -1,19 +1,32 @@
-name: Build unsigned iOS IPA
+name: Build and test iOS app
 
 on:
-  workflow_dispatch:
-    inputs:
-      run_tests:
-        description: "Run iOS simulator tests (slower)"
-        required: false
-        type: boolean
-        default: false
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: xcode-27
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
+      - name: Run portable logic and regression tests
+        run: |
+          swift test --package-path Validation
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v
 
       - name: Generate Xcode project
         run: |
@@ -21,9 +34,18 @@ jobs:
           brew install xcodegen
           xcodegen generate
 
+      - name: Resolve packages and patch the pinned image importer
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project LocalAIStudio.xcodeproj \
+            -scheme LocalAIStudio \
+            -derivedDataPath DerivedData
+          python3 scripts/patch_model_importer.py DerivedData/SourcePackages/checkouts
+
       - name: Build iPhone app without signing
         run: |
-          xcodebuild \
+          set -o pipefail
+          xcodebuild -skipMacroValidation \
             -project LocalAIStudio.xcodeproj \
             -scheme LocalAIStudio \
             -configuration Release \
@@ -31,15 +53,224 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build 2>&1 | tee build.log
 
       - name: Package unsigned IPA
         run: |
           mkdir -p Payload
           cp -R DerivedData/Build/Products/Release-iphoneos/LocalAIStudio.app Payload/
           zip -qr LocalAIStudio-unsigned.ipa Payload
+          python3 - <<'PY'
+          import plistlib, zipfile
+          with zipfile.ZipFile('LocalAIStudio-unsigned.ipa') as ipa:
+              app = 'Payload/LocalAIStudio.app/'
+              info = plistlib.loads(ipa.read(app + 'Info.plist'))
+              for key in ('CFBundleVersion', 'CFBundleShortVersionString'):
+                  assert info.get(key), f'Missing {key} from app bundle'
+              assert info.get('CFBundleDisplayName') == 'AI Studio', 'Incorrect visible app name'
+              assert info.get('CFBundleName') == 'LocalAIStudio', 'Unexpected internal product name'
+              assert info.get('LSSupportsOpeningDocumentsInPlace') is True
+              assert not info.get('UIFileSharingEnabled', False), 'Release must not expose test fixtures'
+              assert info.get('NSMicrophoneUsageDescription'), 'Missing microphone permission description'
+              assert info.get('NSSpeechRecognitionUsageDescription'), 'Missing speech-recognition permission description'
+              assert ipa.getinfo(app + 'en.lproj/Localizable.strings').file_size > 0, 'Missing English app localization'
+              for resource in ('models.json', 'configs.json'):
+                  assert ipa.getinfo(app + resource).file_size > 0, f'Missing image catalog: {resource}'
+              assert ipa.getinfo(app + info['CFBundleExecutable']).file_size > 0
+              assert ipa.getinfo(app + 'Frameworks/CLiteRTLM.framework/CLiteRTLM').file_size > 0
+              assert ipa.getinfo(app + 'Frameworks/MLXBackend.framework/MLXBackend').file_size > 0
+              assert any(name.startswith(app) and 'mlx-swift_Cmlx.bundle/' in name
+                         and name.endswith('/default.metallib') for name in ipa.namelist()), 'Missing MLX Metal shaders'
+              primary_icon = info.get('CFBundleIcons', {}).get('CFBundlePrimaryIcon', {})
+              assert primary_icon.get('CFBundleIconName') == 'AppIcon', 'Missing AppIcon registration'
+              assert ipa.getinfo(app + 'Assets.car').file_size > 0
+              assert ipa.testzip() is None, 'Corrupt IPA entry'
+          print('Unsigned IPA structure, app names, version metadata and icon registration verified.')
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
           name: LocalAIStudio-unsigned
           path: LocalAIStudio-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Render Apple icon previews
+        run: |
+          icon_developer_dir="$(xcode-select -p)"
+          icon_tool="${icon_developer_dir%/Developer}/Applications/Icon Composer.app/Contents/Executables/ictool"
+          mkdir -p build/icon
+          "$icon_tool" --version
+          for appearance in Default Dark TintedLight TintedDark ClearLight ClearDark; do
+            "$icon_tool" Resources/AppIcon.icon \
+              --export-image \
+              --output-file "build/icon/preview-${appearance}.png" \
+              --platform iOS --rendition "$appearance" \
+              --width 1024 --height 1024 --scale 1
+          done
+          "$icon_tool" Resources/AppIcon.icon \
+            --export-image \
+            --output-file build/icon/preview-Default-iOS26.png \
+            --platform iOS --rendition Default \
+            --width 1024 --height 1024 --scale 1 \
+            --design-generation 26
+
+      - name: Upload icon source and previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalAIStudio-IconComposer
+          path: |
+            build/icon/preview-*.png
+            Resources/AppIcon.icon
+          if-no-files-found: error
+
+      - name: Select an available iOS 26 or 27 iPhone simulator
+        if: ${{ github.event_name == 'pull_request' }}
+        id: simulator
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, pathlib, plistlib
+          llama_plists = list(pathlib.Path('DerivedData/SourcePackages/artifacts').rglob('llama.xcframework/Info.plist'))
+          if not llama_plists:
+              raise SystemExit('Cannot locate llama XCFramework platform manifest')
+          supported = all(any(x.get('SupportedPlatformVariant') == 'simulator'
+                              for x in plistlib.loads(p.read_bytes()).get('AvailableLibraries', [])) for p in llama_plists)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"supported={str(supported).lower()}\n")
+          if not supported:
+              print('::notice::Pinned llama.cpp XCFramework has no simulator slice; device build and host logic tests run, simulator inference/UI tests are unavailable.')
+              raise SystemExit(0)
+          devices = json.loads(subprocess.check_output([
+              'xcrun', 'simctl', 'list', 'devices', 'available', '--json'
+          ]))['devices']
+          iphones = [device for runtime, items in sorted(devices.items())
+                     if '.iOS-26-' in runtime or '.iOS-27-' in runtime
+                     for device in items if device['name'].startswith('iPhone')]
+          if not iphones:
+              raise SystemExit('No available iOS 26 or 27 iPhone simulator on this runner')
+          device = iphones[0]
+          print(f"Using {device['name']}: {device['udid']}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f"id={device['udid']}\n")
+          PY
+
+      - name: Build simulator test targets
+        if: ${{ github.event_name == 'pull_request' && steps.simulator.outputs.supported == 'true' }}
+        run: |
+          set -o pipefail
+          xcodebuild -skipMacroValidation \
+            -project LocalAIStudio.xcodeproj \
+            -scheme LocalAIStudio \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            -destination-timeout 120 \
+            -derivedDataPath DerivedData \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build-for-testing 2>&1 | tee test-build.log
+          # A separate app exposes the source documents; never bundled into the IPA.
+          xcodebuild -skipMacroValidation \
+            -project LocalAIStudio.xcodeproj \
+            -scheme ImportFixtureHost \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee fixture-build.log
+
+      - name: Prepare external Files picker fixtures
+        if: ${{ github.event_name == 'pull_request' && steps.simulator.outputs.supported == 'true' }}
+        id: fixtures
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
+        run: |
+          python3 - <<'PY'
+          import pathlib, plistlib
+          products = pathlib.Path('DerivedData/Build/Products')
+          for configuration in ('Debug-iphonesimulator', 'Release-iphoneos'):
+              info = plistlib.loads((products / configuration / 'LocalAIStudio.app/Info.plist').read_bytes())
+              assert info.get('LSSupportsOpeningDocumentsInPlace') is True
+              assert not info.get('UIFileSharingEnabled', False)
+              assert info.get('CFBundleDisplayName') == 'AI Studio'
+              assert info.get('CFBundleName') == 'LocalAIStudio'
+          print('Debug and Release use the same document configuration and app names.')
+          PY
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl install "$SIMULATOR_ID" DerivedData/Build/Products/Debug-iphonesimulator/LocalAIStudio.app
+          xcrun simctl install "$SIMULATOR_ID" DerivedData/Build/Products/Debug-iphonesimulator/ImportFixtureHost.app
+          FIXTURE_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio.importfixtures data)
+          export FIXTURE_CONTAINER
+          python3 - <<'PY'
+          import os, pathlib, struct
+          documents = pathlib.Path(os.environ['FIXTURE_CONTAINER']) / 'Documents'
+          documents.mkdir(exist_ok=True)
+          # Header plus padding exercises a real cross-sandbox copy, not model inference.
+          header = b'LITERTLM' + struct.pack('<IIIIQ', 1, 9, 0, 0, 36) + bytes(4)
+          (documents / 'UI-Import-Test.litertlm').write_bytes(header + bytes(1024 * 1024 - len(header)))
+          (documents / 'UI-Unsupported-File.txt').write_text('An ordinary file, not model weights.\n')
+          PY
+          xcrun simctl launch "$SIMULATOR_ID" dev.example.localaistudio.importfixtures
+
+      - name: Run unit and UI tests
+        if: ${{ github.event_name == 'pull_request' && steps.simulator.outputs.supported == 'true' }}
+        run: |
+          set -o pipefail
+          xcodebuild -skipMacroValidation \
+            -project LocalAIStudio.xcodeproj \
+            -scheme LocalAIStudio \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}' \
+            -destination-timeout 120 \
+            -derivedDataPath DerivedData \
+            -resultBundlePath TestResults.xcresult \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test-without-building 2>&1 | tee test.log
+
+      - name: Verify import sources remain intact
+        if: ${{ always() && github.event_name == 'pull_request' && steps.fixtures.outcome == 'success' }}
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.id }}
+        run: |
+          FIXTURE_CONTAINER=$(xcrun simctl get_app_container "$SIMULATOR_ID" dev.example.localaistudio.importfixtures data)
+          export FIXTURE_CONTAINER
+          python3 - <<'PY'
+          import os, pathlib, struct
+          documents = pathlib.Path(os.environ['FIXTURE_CONTAINER']) / 'Documents'
+          header = b'LITERTLM' + struct.pack('<IIIIQ', 1, 9, 0, 0, 36) + bytes(4)
+          assert (documents / 'UI-Import-Test.litertlm').read_bytes() == header + bytes(1024 * 1024 - len(header))
+          assert (documents / 'UI-Unsupported-File.txt').read_text() == 'An ordinary file, not model weights.\n'
+          print('External source files are unchanged after UI tests.')
+          PY
+
+      - name: Export test screenshots
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path TestResults.xcresult \
+              --output-path Screenshots
+          fi
+
+      - name: Upload test screenshots
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalAIStudio-screenshots
+          path: Screenshots
+          if-no-files-found: warn
+
+      - name: Upload build logs and test results
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalAIStudio-test-results
+          path: |
+            build.log
+            test-build.log
+            fixture-build.log
+            test.log
+            TestResults.xcresult
+          if-no-files-found: warn

@@ -1,0 +1,275 @@
+"模型" = "Models";
+"生图" = "Generate";
+"设置" = "Settings";
+"主题" = "Appearance";
+"跟随系统" = "Follow System";
+"浅色" = "Light";
+"深色" = "Dark";
+"语言" = "Language";
+"简体中文" = "Simplified Chinese";
+"主题色" = "Accent Color";
+"绿色" = "Green";
+"蓝色" = "Blue";
+"紫色" = "Purple";
+"橙色" = "Orange";
+"粉色" = "Pink";
+"外观" = "Appearance";
+"系统辅助功能" = "Accessibility";
+"降低透明度" = "Reduce Transparency";
+"减少动态效果" = "Reduce Motion";
+"增加对比度" = "Increase Contrast";
+"已开启" = "On";
+"未开启" = "Off";
+"本机数据" = "On-device Data";
+"开源许可" = "Open-source Licenses";
+"第三方组件" = "Third-party Components";
+"完成" = "Done";
+"操作未完成" = "Operation Failed";
+"好" = "OK";
+"AI" = "AI";
+"模型配置" = "Model Settings";
+"对话设置" = "Chat Settings";
+"系统提示词" = "System Prompt";
+"取消" = "Cancel";
+"应用" = "Apply";
+"恢复默认配置" = "Restore Defaults";
+"最大输出 Token" = "Max Output Tokens";
+"加速器" = "Accelerator";
+"自动" = "Auto";
+"启用思考" = "Enable Thinking";
+"推测解码" = "Speculative Decoding";
+"朗读" = "Speak";
+"停止朗读" = "Stop Speaking";
+"结束语音输入" = "Stop Dictation";
+"语音输入" = "Voice Input";
+"自动朗读回复" = "Auto-play Responses";
+"语音语言" = "Speech Language";
+"朗读声音" = "Voice";
+"系统默认" = "System Default";
+"中文" = "Chinese";
+"朗读与识别语言" = "Speech and Recognition Language";
+"发送消息…" = "Message…";
+"未选择模型" = "No Model Selected";
+"管理模型…" = "Manage Models…";
+"已加载" = "Loaded";
+"对话选项" = "Chat Options";
+"卸载模型" = "Unload Model";
+"清空对话" = "Clear Conversation";
+"发送" = "Send";
+"停止" = "Stop";
+"选择模型" = "Choose Model";
+"在这台 iPhone 上对话" = "Chat on This iPhone";
+"先导入并选择一个 LiteRT-LM 模型。" = "Import and select a LiteRT-LM model first.";
+"消息由本地模型处理。首次发送时会加载所选模型。" = "Messages are processed locally. The model loads on first use.";
+"模型详情" = "Model Details";
+"添加模型" = "Add Model";
+"从文件导入" = "Import from Files";
+"从 HTTPS 下载" = "Download from HTTPS";
+"本机模型" = "Local Models";
+"文件占用" = "Files Size";
+"模型文件" = "Model Files";
+"搜索本机模型" = "Search Models";
+"添加你的第一个模型" = "Add Your First Model";
+"重新打开模型库" = "Reopen Model Library";
+"下载" = "Download";
+"下载模型" = "Download Model";
+"文件直链" = "Direct File Link";
+"文件名（可选）" = "Filename (Optional)";
+"文件" = "File";
+"名称" = "Name";
+"大小" = "Size";
+"导入时间" = "Imported";
+"识别结果" = "Inspection";
+"格式" = "Format";
+"架构" = "Architecture";
+"量化" = "Quantization";
+"适配器" = "Adapter";
+"运行兼容性" = "Runtime Compatibility";
+"用于 AI 对话" = "Use in AI Chat";
+"清空当前对话？" = "Clear Conversation?";
+"首次尝试这个模型" = "First Run with This Model";
+"加载并发送" = "Load and Send";
+"System" = "System";
+"内存" = "Memory";
+"存储" = "Storage";
+"设备信息" = "Device Information";
+"运行记录" = "Run History";
+"正在读取设备状态…" = "Reading Device Status…";
+"RAM" = "RAM";
+"已用估算" = "Estimated In Use";
+"文件缓存" = "File Cache";
+"本 App" = "This App";
+"剩余存储" = "Storage Available";
+"App CPU" = "App CPU";
+"电池" = "Battery";
+"热状态" = "Thermal State";
+"运行状态" = "Activity";
+"空闲" = "Free";
+"运行中" = "Running";
+"已用" = "Used";
+"总量" = "Total";
+"活跃" = "Active";
+"非活跃" = "Inactive";
+"有线" = "Wired";
+"压缩" = "Compressed";
+"进程剩余预算" = "App Memory Headroom";
+"整机 RAM" = "Device RAM";
+"原始占用" = "Raw Occupied";
+"设备" = "Device";
+"型号" = "Model";
+"系统" = "System";
+"处理器核心" = "CPU Cores";
+"网络" = "Network";
+"低电量模式" = "Low Power Mode";
+"状态" = "Status";
+"更新时间" = "Last Updated";
+"最近样本" = "Recent Samples";
+"采样" = "Sampling";
+"GPU" = "GPU";
+"Metal 设备" = "Metal Device";
+"正在检查并保存文件…" = "Checking and Saving File…";
+"取消导入" = "Cancel Import";
+"已暂停" = "Paused";
+"正在充电" = "Charging";
+"正常" = "Normal";
+"详细信息" = "Details";
+"后端" = "Backend";
+"加载" = "Load";
+"首 Token" = "First Token";
+"生成速度" = "Generation Speed";
+"暂无推理记录" = "No Inference Records";
+
+/* Model identification and processing */
+"类型" = "Type";
+"重新识别" = "Inspect Again";
+"模型处理" = "Model Processing";
+"取消处理" = "Cancel Processing";
+"转换模型" = "Convert Model";
+"转换类型" = "Conversion Type";
+"生图主模型" = "Image Model";
+"底模架构" = "Base Architecture";
+"自动识别" = "Detect Automatically";
+"基础配置" = "Base Configuration";
+"请选择" = "Select…";
+"独立 VAE" = "Separate VAE";
+"使用模型内置或标准 VAE" = "Use Embedded or Standard VAE";
+"已识别架构" = "Detected Architecture";
+"转换" = "Convert";
+"转换为生图模型／LoRA" = "Convert Image Model / LoRA";
+"创建 8-bit 主模型" = "Create 8-bit Base Model";
+"用于生图" = "Use for Image Generation";
+"LoRA 强度" = "LoRA Weight";
+"不使用" = "None";
+"清理生图配套资源" = "Clear Image Model Resources";
+"模型默认" = "Model Default";
+"导入支持的 Checkpoint，或在模型详情中转换 Safetensors。" = "Import a supported checkpoint, or convert Safetensors in model details.";
+
+// Local speech models
+"语音" = "Speech";
+"语音模型" = "Speech models";
+"朗读方式" = "Speech output";
+"iOS 系统语音" = "iOS system voice";
+"音色" = "Voice";
+"音色 %lld" = "Voice %lld";
+"语速" = "Speed";
+"试听文本" = "Preview text";
+"试听" = "Preview";
+"正在朗读…" = "Reading aloud…";
+"添加语音模型" = "Add a speech model";
+"下载 Kokoro 中英文模型（约 151 MB）" = "Download Kokoro Chinese/English (about 151 MB)";
+"导入 Kokoro 模型文件夹" = "Import a Kokoro model folder";
+"取消下载或导入" = "Cancel download or import";
+"模型来源与许可" = "Model source and license";
+"已下载与导入" = "Downloaded and imported";
+"删除语音模型？" = "Delete speech model?";
+"语音模型与朗读" = "Speech models and playback";
+"语音输入使用设备端识别；朗读可选择系统声音或导入的 Kokoro 模型。" = "Speech input uses on-device recognition. Playback can use system voices or imported Kokoro models.";
+"音色编号沿用模型音色表；官方多语言包的中文音色从 45 开始。" = "Voice IDs follow the model voice table. Chinese voices in the official multilingual pack start at 45.";
+"下载后可离线使用。支持 sherpa-onnx 格式的 Kokoro v1.0 模型包，需包含 ONNX 权重、voices.bin、tokens.txt 和中英文词典；不支持直接导入任意 TTS 权重。" = "Works offline after downloading. Supports sherpa-onnx Kokoro v1.0 packages containing ONNX weights, voices.bin, tokens.txt and Chinese/English lexicons. Other TTS weights are not supported.";
+
+// Web tools
+"联网工具" = "Web tools";
+"允许联网" = "Allow web access";
+"联网记录" = "Web activity";
+"网页来源" = "Web sources";
+"联网默认关闭。开启后可直接搜索和读取公开网页，无需注册或填写 API Key；搜索词和链接会发给对应网站。" = "Web access is off by default. Enable it to search and read public pages without registration or API keys. Search terms and URLs are sent to the relevant websites.";
+"搜索使用公开网页，可能遇到访问限制；失败时会明确提示，也可以直接提供链接。联网会增加等待时间，需要模型正确输出工具请求。" = "Public search pages may restrict access. Failures are shown explicitly; you can also provide a link. Web access adds latency and requires valid model tool requests.";
+
+"显示名称" = "Display Name";
+
+"重命名" = "Rename";
+
+"原文件名" = "Original Filename";
+
+"重命名模型" = "Rename Model";
+
+"保存" = "Save";
+
+"留空恢复文件名；不会修改模型文件。" = "Leave blank to use the filename. The model file is unchanged.";
+
+"模型与配套组件" = "Model and components";
+
+"按原文件名匹配目录" = "Match catalog by original filename";
+
+"基础配置必须与权重一致。原始 PyTorch Checkpoint 不能直接运行；这里只接受 Draw Things 格式。" = "The profile must match the weights. Raw PyTorch checkpoints cannot run directly; use Draw Things format.";
+
+"使用配套资源" = "Use model components";
+
+"配套组件" = "Companion components";
+
+"可选择已导入且架构匹配的 Draw Things .ckpt 组件。原始 Safetensors VAE／文本编码器需在主模型转换时选择。缺少的标准组件可在生图页下载。" = "Select imported Draw Things .ckpt components matching this architecture. Choose raw Safetensors VAE/text encoders during model conversion. Download missing standard components on the Generate page.";
+
+"检查并下载配套资源" = "Check and download components";
+
+"收起键盘" = "Dismiss keyboard";
+
+"文本编码器" = "Text encoder";
+
+"使用内置或标准组件" = "Use embedded or standard component";
+
+"第二文本编码器（bigG）" = "Second text encoder (bigG)";
+
+"此架构使用标准配套组件；转换后可在生图页指定兼容的 Draw Things VAE／文本编码器。" = "This architecture uses standard components. After conversion, select compatible Draw Things VAE/text encoders on the Generate page.";
+
+"生成历史" = "Generated images";
+
+"暂无生成图片" = "No generated images";
+
+"生成的图片会保存在这里，重新打开 App 后仍可查看和分享。" = "Generated images are kept here for viewing and sharing after reopening the app.";
+
+"删除这张图片？" = "Delete this image?";
+
+"图片历史" = "Image history";
+
+"生成图片" = "Generated image";
+
+"删除图片" = "Delete image";
+
+"无法预览图片" = "Cannot preview image";
+
+"尝试用于 AI 对话" = "Try AI chat";
+
+"删除异常条目" = "Delete invalid entry";
+
+"重新检查异常条目" = "Recheck invalid entries";
+
+"需要处理的模型" = "Models needing attention";
+
+"这些文件已保留，未计入上方文件占用。可以重试检查，或删除条目后从原始文件重新导入。其他模型仍可使用。" = "These files are preserved and are not included in the storage total above. Recheck them, or delete the entries and import the original files again. Other models remain available.";
+
+"删除异常模型？" = "Delete invalid model?";
+
+"这会删除该条目在 App 内保存的文件。请保留原始文件，以便重新导入。其他模型不会被删除。" = "This deletes the files stored for this entry in the app. Keep the original files to import them again. Other models will not be deleted.";
+
+"下载管理未能打开，本机模型仍可使用。下载文件已保留，请重试。" = "Download management could not open. Local models remain available and downloaded files are preserved. Try again.";
+
+"重新打开下载管理" = "Reopen download management";
+
+"准备聊天…" = "Preparing chat…";
+"准备任务" = "Preparing task";
+"准备生图…" = "Preparing image generation…";
+"准备生图资源…" = "Preparing image resources…";
+"本地语音" = "Local speech";
+"准备录音…" = "Preparing recording…";
+"录音中" = "Recording";
+"导入模型" = "Import model";
