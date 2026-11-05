@@ -21,6 +21,8 @@ struct GeneratePage: View {
     @State private var loraWeight = 0.8
     let openModels: () -> Void
 
+    private let stepOptions: [Int] = [4, 8, 16, 24, 32, 50]
+
     private var supported: [LocalModel] {
         library.models.filter { $0.supportsImageGeneration }
     }
@@ -51,76 +53,12 @@ struct GeneratePage: View {
                                 .buttonStyle(.borderedProminent)
                         }
                     } else {
-                        Picker("Checkpoint", selection: $selectedID) {
-                            ForEach(supported) { model in
-                                Text(model.title).tag(model.id.uuidString)
-                            }
-                        }
-                        .accessibilityIdentifier("imageModelPicker")
-                        if let selectedModel {
-                            NavigationLink("模型与配套组件") { ImageModelSettingsPage(model: selectedModel) }
-                                .disabled(generator.isGenerating || library.isProcessing)
-                            Button("检查并下载配套资源") { start(selectedModel, prepareOnly: true) }
-                                .disabled(busy || preparation.isPreparing || library.isProcessing)
-                        }
-                        Picker("LoRA", selection: $loraID) {
-                            Text("不使用").tag("")
-                            ForEach(compatibleLoRAs) { adapter in
-                                Text(adapter.title).tag(adapter.id.uuidString)
-                            }
-                        }
-                        .accessibilityIdentifier("imageLoRAPicker")
-                        if !loraID.isEmpty {
-                            HStack {
-                                Text("LoRA 强度")
-                                Slider(value: $loraWeight, in: -1...2, step: 0.05)
-                                Text(loraWeight.formatted(.number.precision(.fractionLength(2))))
-                            }
-                        }
-                        TextField("描述你想生成的画面", text: $prompt, axis: .vertical)
-                            .lineLimit(3...6)
-                            .textFieldStyle(.roundedBorder)
-                            .focused($focusedField, equals: .prompt)
-                            .accessibilityIdentifier("imagePrompt")
-                        TextField("负面提示词（可选）", text: $negativePrompt, axis: .vertical)
-                            .focused($focusedField, equals: .negativePrompt)
-                            .lineLimit(1...3)
-                            .textFieldStyle(.roundedBorder)
-                        HStack {
-                            Picker("尺寸", selection: $size) {
-                                Text("512").tag(512)
-                                Text("768").tag(768)
-                            }
-                            Picker("步数", selection: $steps) {
-                                Text("模型默认").tag(0)
-                                ForEach([4, 8, 16, 24, 32, 50], id: \.self) { n in
-                                    Text("\(n)").tag(n)
-                                }
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        Button {
-                            if busy { stop() }
-                            else if let selectedModel { start(selectedModel, prepareOnly: false) }
-                        } label: {
-                            Label(busy ? "取消生成" : "生成",
-                                  systemImage: busy ? "stop.fill" : "sparkles")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!busy && (library.isProcessing || preparation.isPreparing || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                        .accessibilityIdentifier("generateImage")
-                        if busy {
-                            ProgressView(LocalizedStringKey(generator.isGenerating ? generator.status : "准备生图…"))
-                        } else if !generator.status.isEmpty {
-                            Text(generator.status).foregroundStyle(.secondary)
-                        }
-                        if let url = generator.resultURL {
-                            GeneratedImagePreview(url: url)
-                            ShareLink("分享或保存图片", item: url)
-                                .buttonStyle(.bordered)
-                        }
-                        Text("需要兼容的 Draw Things Checkpoint 和配套资源。大模型可能触发 iOS 内存限制。")
-                            .font(.footnote).foregroundStyle(.secondary)
+                        modelControls
+                        loraControls
+                        promptFields
+                        generationOptions
+                        generateButton
+                        generationResult
                     }
                 }
                 .padding(20)
@@ -163,6 +101,100 @@ struct GeneratePage: View {
             }
         }
     }
+    @ViewBuilder
+    private var modelControls: some View {
+        Picker("Checkpoint", selection: $selectedID) {
+            ForEach(supported) { model in
+                Text(model.title).tag(model.id.uuidString)
+            }
+        }
+        .accessibilityIdentifier("imageModelPicker")
+        if let selectedModel {
+            NavigationLink("模型与配套组件") { ImageModelSettingsPage(model: selectedModel) }
+                .disabled(generator.isGenerating || library.isProcessing)
+            Button("检查并下载配套资源") { start(selectedModel, prepareOnly: true) }
+                .disabled(busy || preparation.isPreparing || library.isProcessing)
+        }
+    }
+
+    @ViewBuilder
+    private var loraControls: some View {
+        Picker("LoRA", selection: $loraID) {
+            Text("不使用").tag("")
+            ForEach(compatibleLoRAs) { adapter in
+                Text(adapter.title).tag(adapter.id.uuidString)
+            }
+        }
+        .accessibilityIdentifier("imageLoRAPicker")
+        if !loraID.isEmpty {
+            HStack {
+                Text("LoRA 强度")
+                Slider(value: $loraWeight, in: -1...2, step: 0.05)
+                Text(loraWeight.formatted(.number.precision(.fractionLength(2))))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var promptFields: some View {
+        TextField("描述你想生成的画面", text: $prompt, axis: .vertical)
+            .lineLimit(3...6)
+            .textFieldStyle(.roundedBorder)
+            .focused($focusedField, equals: .prompt)
+            .accessibilityIdentifier("imagePrompt")
+        TextField("负面提示词（可选）", text: $negativePrompt, axis: .vertical)
+            .focused($focusedField, equals: .negativePrompt)
+            .lineLimit(1...3)
+            .textFieldStyle(.roundedBorder)
+    }
+
+    @ViewBuilder
+    private var generationOptions: some View {
+        HStack {
+            Picker("尺寸", selection: $size) {
+                Text("512").tag(512)
+                Text("768").tag(768)
+            }
+            Picker("步数", selection: $steps) {
+                Text("模型默认").tag(0)
+                ForEach(stepOptions, id: \.self) { n in
+                    Text("\(n)").tag(n)
+                }
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    @ViewBuilder
+    private var generateButton: some View {
+        Button {
+            if busy { stop() }
+            else if let selectedModel { start(selectedModel, prepareOnly: false) }
+        } label: {
+            Label(busy ? "取消生成" : "生成",
+                  systemImage: busy ? "stop.fill" : "sparkles")
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!busy && (library.isProcessing || preparation.isPreparing || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+        .accessibilityIdentifier("generateImage")
+    }
+
+    @ViewBuilder
+    private var generationResult: some View {
+        if busy {
+            ProgressView(LocalizedStringKey(generator.isGenerating ? generator.status : "准备生图…"))
+        } else if !generator.status.isEmpty {
+            Text(generator.status).foregroundStyle(.secondary)
+        }
+        if let url = generator.resultURL {
+            GeneratedImagePreview(url: url)
+            ShareLink("分享或保存图片", item: url)
+                .buttonStyle(.bordered)
+        }
+        Text("需要兼容的 Draw Things Checkpoint 和配套资源。大模型可能触发 iOS 内存限制。")
+            .font(.footnote).foregroundStyle(.secondary)
+    }
+
     private var busy: Bool { generationTask != nil || generator.isGenerating }
 
     private func start(_ model: LocalModel, prepareOnly: Bool) {
