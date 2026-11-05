@@ -29,6 +29,14 @@ struct GeneratePage: View {
         supported.first { $0.id.uuidString == selectedID }
     }
 
+    private var compatibleLoRAs: [LocalModel] {
+        let architecture = selectedModel?.architecture
+        return library.models.filter { model in
+            guard model.format == .drawThingsBundle, model.kind == .lora else { return false }
+            return architecture == nil || model.architecture == architecture
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -57,8 +65,7 @@ struct GeneratePage: View {
                         }
                         Picker("LoRA", selection: $loraID) {
                             Text("不使用").tag("")
-                            ForEach(library.models.filter { $0.format == .drawThingsBundle && $0.kind == .lora &&
-                                (selectedModel?.architecture == nil || $0.architecture == selectedModel?.architecture) }) { adapter in
+                            ForEach(compatibleLoRAs) { adapter in
                                 Text(adapter.title).tag(adapter.id.uuidString)
                             }
                         }

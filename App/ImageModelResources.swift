@@ -95,8 +95,8 @@ enum ImageModelResources {
             guard !keys.isEmpty else {
                 throw ModelFileError.invalid("Checkpoint 没有可读取的张量索引。")
             }
-            if !DynamicGraph.Store.isTrailerStore(url.path),
-               keys.contains(where: { store.codec(for: $0)?.contains(.externalData) == true }) {
+            // The pinned NNC version has no single-file trailer-store reader.
+            if keys.contains(where: { store.codec(for: $0)?.contains(.externalData) == true }) {
                 throw ModelFileError.invalid("这个 Checkpoint 依赖单独的外部张量文件。请从 Draw Things 导出包含完整权重的单文件，再导入使用。")
             }
         }.get()
