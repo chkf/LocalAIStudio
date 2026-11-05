@@ -1,6 +1,7 @@
 import hashlib
 from pathlib import Path
 import tempfile
+import stat
 import unittest
 from unittest.mock import patch
 
@@ -39,6 +40,14 @@ class ModelImporterPatchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "revision changed"):
             importer.patch_importer(self.checkouts)
         self.assertEqual(self.source.read_bytes(), self.original)
+
+    def test_read_only_swiftpm_source_is_patched_and_permissions_restored(self):
+        self.source.chmod(0o444)
+        self.assertTrue(importer.patch_importer(self.checkouts))
+        self.assertEqual(self.source.read_bytes(), self.expected)
+        self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o444)
+        self.assertFalse(importer.patch_importer(self.checkouts))
+        self.assertEqual(stat.S_IMODE(self.source.stat().st_mode), 0o444)
 
     def test_unknown_source_leaves_source_intact(self):
         edited = self.original + b"// unreviewed edit\n"

@@ -10,6 +10,7 @@ patching future dependency versions.
 import argparse
 import hashlib
 from pathlib import Path
+import stat
 import subprocess
 import sys
 
@@ -40,7 +41,14 @@ def patch_importer(checkouts: Path) -> bool:
     patched = original.replace(BEFORE, AFTER, 1)
     if hashlib.sha256(patched).hexdigest() != PATCHED_SHA256:
         raise ValueError("ModelImporter patch checksum does not match the reviewed result.")
-    source.write_bytes(patched)
+    # SwiftPM makes checkout sources read-only on macOS. Change only the
+    # reviewed file, after all checks, and retain SwiftPM's original mode.
+    mode = stat.S_IMODE(source.stat().st_mode)
+    source.chmod(mode | stat.S_IWUSR)
+    try:
+        source.write_bytes(patched)
+    finally:
+        source.chmod(mode)
     return True
 
 
