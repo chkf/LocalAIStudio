@@ -92,8 +92,12 @@ struct GeneratePage: View {
     @ToolbarContentBuilder
     private var pageToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            NavigationLink("生成历史", systemImage: "clock.arrow.circlepath") { ImageHistoryPage() }
-                .accessibilityIdentifier("imageHistory")
+            NavigationLink {
+                ImageHistoryPage()
+            } label: {
+                Label("生成历史", systemImage: "clock.arrow.circlepath")
+            }
+            .accessibilityIdentifier("imageHistory")
         }
         ToolbarItemGroup(placement: .keyboard) {
             Spacer()
