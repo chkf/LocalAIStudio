@@ -40,67 +40,87 @@ struct GeneratePage: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if supported.isEmpty {
-                        ContentUnavailableView {
-                            Label("添加生图 Checkpoint", systemImage: "photo.badge.plus")
-                        } description: {
-                            Text("导入支持的 Checkpoint，或在模型详情中转换 Safetensors。")
-                        } actions: {
-                            Button("管理模型", action: openModels)
-                                .buttonStyle(.borderedProminent)
-                        }
-                    } else {
-                        modelControls
-                        loraControls
-                        promptFields
-                        generationOptions
-                        generateButton
-                        generationResult
-                    }
-                }
-                .padding(20)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("生图")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink("生成历史", systemImage: "clock.arrow.circlepath") { ImageHistoryPage() }
-                        .accessibilityIdentifier("imageHistory")
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("收起键盘", systemImage: "keyboard.chevron.compact.down") { focusedField = nil }
-                        .accessibilityIdentifier("dismissImageKeyboard")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if focusedField != nil {
-                        Button("完成") { focusedField = nil }
-                            .accessibilityIdentifier("finishImageEditing")
-                    }
-                }
-            }
+        NavigationStack { pageContent }
             .onDisappear { focusedField = nil }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .background { stop() }
-            }
-            .onAppear { if selectedModel == nil { selectedID = supported.first?.id.uuidString ?? "" } }
-            .onChange(of: selectedID) { _, _ in loraID = "" }
-            .onChange(of: supported.count) { _, _ in
-                if selectedModel == nil { selectedID = supported.first?.id.uuidString ?? "" }
-            }
-            .alert("生图失败", isPresented: Binding(
-                get: { generator.errorMessage != nil },
-                set: { if !$0 { generator.errorMessage = nil } }
-            )) {
+            .onChange(of: scenePhase, scenePhaseChanged)
+            .onAppear(perform: selectDefaultModel)
+            .onChange(of: selectedID) { loraID = "" }
+            .onChange(of: supported.count) { selectDefaultModel() }
+    }
+
+    private var pageContent: some View {
+        scrollContent
+            .navigationTitle("生图")
+            .toolbar { pageToolbar }
+            .alert("生图失败", isPresented: errorPresented) {
                 Button("好") { generator.errorMessage = nil }
             } message: {
                 Text(generator.errorMessage ?? "")
             }
+    }
+
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if supported.isEmpty {
+                    emptyContent
+                } else {
+                    modelControls
+                    loraControls
+                    promptFields
+                    generationOptions
+                    generateButton
+                    generationResult
+                }
+            }
+            .padding(20)
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var emptyContent: some View {
+        ContentUnavailableView {
+            Label("添加生图 Checkpoint", systemImage: "photo.badge.plus")
+        } description: {
+            Text("导入支持的 Checkpoint，或在模型详情中转换 Safetensors。")
+        } actions: {
+            Button("管理模型", action: openModels)
+                .buttonStyle(.borderedProminent)
         }
     }
+
+    @ToolbarContentBuilder
+    private var pageToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            NavigationLink("生成历史", systemImage: "clock.arrow.circlepath") { ImageHistoryPage() }
+                .accessibilityIdentifier("imageHistory")
+        }
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button("收起键盘", systemImage: "keyboard.chevron.compact.down") { focusedField = nil }
+                .accessibilityIdentifier("dismissImageKeyboard")
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            if focusedField != nil {
+                Button("完成") { focusedField = nil }
+                    .accessibilityIdentifier("finishImageEditing")
+            }
+        }
+    }
+
+    private var errorPresented: Binding<Bool> {
+        Binding(get: { generator.errorMessage != nil },
+                set: { if !$0 { generator.errorMessage = nil } })
+    }
+
+    private func scenePhaseChanged(_ oldPhase: ScenePhase, _ phase: ScenePhase) {
+        if phase == .background { stop() }
+    }
+
+    private func selectDefaultModel() {
+        if selectedModel == nil { selectedID = supported.first?.id.uuidString ?? "" }
+    }
+
     @ViewBuilder
     private var modelControls: some View {
         Picker("Checkpoint", selection: $selectedID) {
